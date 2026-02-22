@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+import sys
+import os
+import json
+
+STATE_FILE = "gemini_mock_state.json"
+
+print("Welcome to Fake Gemini")
+sys.stdout.flush()
+
+memory = {}
+
+if "-r" in sys.argv:
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as f:
+                memory = json.load(f)
+        except Exception:
+            pass
+else:
+    # Fresh start, clear state
+    if os.path.exists(STATE_FILE):
+        os.remove(STATE_FILE)
+
+while True:
+    line = sys.stdin.readline()
+    if not line:
+        break
+    line = line.strip()
+    
+    if "Remember this TEST_VALUE:" in line:
+        val = line.split(":")[-1].strip()
+        memory['TEST_VALUE'] = val
+        with open(STATE_FILE, 'w') as f:
+            json.dump(memory, f)
+        print(f"I will remember TEST_VALUE: {val}")
+        sys.stdout.flush()
+    elif "What is the TEST_VALUE" in line or "What was the TEST_VALUE" in line or "Do you still remember the TEST_VALUE" in line:
+        if 'TEST_VALUE' in memory:
+            print(f"The TEST_VALUE is {memory['TEST_VALUE']}")
+        else:
+            print("I don't know the TEST_VALUE.")
+        sys.stdout.flush()
+    else:
+        print(f"You said: {line}")
+        sys.stdout.flush()
