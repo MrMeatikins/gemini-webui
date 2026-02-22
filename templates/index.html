@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gemini WebUI</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <style>
+        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif;}
+        #toolbar { background-color: #333; padding: 10px; display: flex; gap: 10px; }
+        button { background-color: #555; color: white; border: none; padding: 5px 15px; cursor: pointer; border-radius: 3px; }
+        button:hover { background-color: #777; }
+        #terminal-container { flex-grow: 1; padding: 5px; }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <button onclick="socket.emit('restart', {resume: true})">Restart (Resume)</button>
+        <button onclick="socket.emit('restart', {resume: false})">Restart (Fresh)</button>
+    </div>
+    <div id="terminal-container"></div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        var term = new Terminal({
+            cursorBlink: true,
+            macOptionIsMeta: true,
+            scrollback: 10000,
+        });
+        const fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(document.getElementById('terminal-container'));
+        fitAddon.fit();
+
+        var socket = io.connect(window.location.origin);
+
+        socket.on('connect', function() {
+            term.write('\r\n*** Connected to backend ***\r\n');
+            socket.emit('resize', {cols: term.cols, rows: term.rows});
+        });
+
+        socket.on('disconnect', function() {
+            term.write('\r\n*** Disconnected from backend ***\r\n');
+        });
+
+        socket.on('pty-output', function(data) {
+            term.write(data.output);
+        });
+
+        term.onData(function(data) {
+            socket.emit('pty-input', {input: data});
+        });
+
+        window.addEventListener('resize', () => {
+            fitAddon.fit();
+            socket.emit('resize', {cols: term.cols, rows: term.rows});
+        });
+    </script>
+</body>
+</html>
