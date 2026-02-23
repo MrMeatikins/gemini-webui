@@ -50,6 +50,13 @@
                 <input type="file" id="ssh-key-file" style="margin: 10px 0;">
                 <button onclick="uploadKey()" style="background: #2472c8;">Upload Key</button>
             </div>
+            <hr style="margin-top: 20px;">
+            <div style="margin-top: 20px;">
+                <h3>Paste Private Key</h3>
+                <input type="text" id="ssh-key-name" placeholder="Key name (e.g. my_server)" style="width: 100%; background: #444; color: white; border: 1px solid #666; padding: 5px; margin: 5px 0;">
+                <textarea id="ssh-key-text" placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..." style="width: 100%; height: 100px; background: #444; color: white; border: 1px solid #666; padding: 5px; margin: 5px 0; font-family: monospace;"></textarea>
+                <button onclick="savePastedKey()" style="background: #2472c8;">Save Pasted Key</button>
+            </div>
         </div>
     </div>
     
@@ -196,6 +203,27 @@
                 fileInput.value = '';
             } else {
                 alert('Failed to upload key.');
+            }
+        }
+
+        async function savePastedKey() {
+            const name = document.getElementById('ssh-key-name').value;
+            const text = document.getElementById('ssh-key-text').value;
+            if (!name || !text) {
+                alert('Please provide both a name and the key text.');
+                return;
+            }
+            const response = await fetch('/api/keys/text', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, key: text })
+            });
+            if (response.ok) {
+                alert('Key saved successfully!');
+                document.getElementById('ssh-key-name').value = '';
+                document.getElementById('ssh-key-text').value = '';
+            } else {
+                alert('Failed to save key.');
             }
         }
     </script>

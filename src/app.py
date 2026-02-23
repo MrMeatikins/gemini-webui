@@ -249,15 +249,19 @@ def start_gemini(resume=False, rows=24, cols=80, ssh_target=None, ssh_dir=None):
             
             cmd = ['ssh', '-X', '-t']
             
-            # Add identity files from /data/.ssh
-            if os.path.exists(SSH_DIR):
-                for f in os.listdir(SSH_DIR):
-                    if not f.endswith('.pub') and not f.startswith('config'):
-                        key_path = os.path.join(SSH_DIR, f)
-                        # Basic check if it's a file and not a directory
-                        if os.path.isfile(key_path):
-                            cmd.extend(['-i', key_path])
+            # Add identity files from /data/.ssh and the default /home/node/.ssh
+            search_dirs = [SSH_DIR, "/home/node/.ssh"]
+            for sdir in search_dirs:
+                if os.path.exists(sdir):
+                    for f in os.listdir(sdir):
+                        # Avoid pub keys and config files
+                        if not f.endswith('.pub') and not f.startswith('config') and not f.startswith('known_hosts'):
+                            key_path = os.path.join(sdir, f)
+                            if os.path.isfile(key_path):
+                                cmd.extend(['-i', key_path])
             
+            # Try keys first, then password
+            cmd.extend(['-o', 'PreferredAuthentications=publickey,password'])
             # Disable strict host key checking to avoid interactive prompts
             cmd.extend(['-o', 'StrictHostKeyChecking=no'])
             
@@ -315,6 +319,27 @@ def add_ssh_key():
     os.chmod(save_path, 0o600)
     
     return jsonify({"status": "success", "filename": filename})
+
+@app.route('/api/keys/text', methods=['POST'])
+@authenticated_only
+def add_ssh_key_text():
+    data = request.json
+    name = secure_filename(data.get('name'))
+    key_text = data.get('key')
+    
+    if not name or not key_text:
+        return jsonify({"status": "error", "message": "Name and key are required"}), 400
+    
+    # Ensure it ends with a newline
+    if not key_text.endswith('\n'):
+        key_text += '\n'
+        
+    save_path = os.path.join(SSH_DIR, name)
+    with open(save_path, 'w', encoding='utf-8') as f:
+        f.write(key_text)
+    os.chmod(save_path, 0o600)
+    
+    return jsonify({"status": "success", "filename": name})
 
 @socketio.on('pty-input')
 @authenticated_only
