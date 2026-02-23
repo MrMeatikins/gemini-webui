@@ -14,10 +14,6 @@ MAX_TEST_TIME = 20.0
 @pytest.mark.prone_to_timeout
 @pytest.mark.timeout(20)
 def test_gemini_ui_basic_interaction(server):
-    import os
-    print(f"DEBUG: Current directory: {os.getcwd()}")
-    print(f"DEBUG: app.py path: {os.path.abspath('src/app.py')}")
-    print(f"DEBUG: index.html path: {os.path.abspath('src/templates/index.html')}")
     start_time = time.time()
     
     def log_progress(step_name):
@@ -48,7 +44,7 @@ def test_gemini_ui_basic_interaction(server):
             
             # 3. Start a local session
             log_progress("Starting local session")
-            start_btn = page.locator('button:has-text("Start New")').first
+            start_btn = page.locator('button.primary:has-text("Start New")').first
             start_btn.wait_for(state="visible", timeout=5000)
             start_btn.click()
             

@@ -44,7 +44,7 @@ app = Flask(__name__, template_folder=template_dir)
 # Handle proxy headers (X-Forwarded-For, X-Forwarded-Proto, etc.)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
-# Multi-tab support: sid -> {'fd': fd, 'pid': pid}
+# Multi-tab support: sid -> {'fd': fd, 'pid': pid, 'decoder': decoder}
 active_ptys = {}
 
 def get_config_paths():
@@ -245,14 +245,16 @@ def read_and_forward_pty_output():
         socketio.sleep(0.01)
         for sid, pty_info in list(active_ptys.items()):
             fd = pty_info['fd']
+            decoder = pty_info['decoder']
             try:
                 (data_ready, _, _) = select.select([fd], [], [], 0)
                 if data_ready:
                     output = os.read(fd, max_read_bytes)
                     if output:
-                        socketio.emit('pty-output', {'output': output.decode('utf-8', 'replace')}, room=sid)
+                        decoded_output = decoder.decode(output)
+                        if decoded_output:
+                            socketio.emit('pty-output', {'output': decoded_output}, room=sid)
             except (OSError, IOError, EOFError):
-                # Process likely died
                 active_ptys.pop(sid, None)
 
 @socketio.on('pty-input')
@@ -292,6 +294,9 @@ def pty_restart(data):
     (child_pid, fd) = pty.fork()
     if child_pid == 0:
         # Child process
+        os.environ['TERM'] = 'xterm-256color'
+        os.environ['COLORTERM'] = 'truecolor'
+        
         if ssh_target:
             remote_cmd = "gemini"
             if resume is True:
@@ -326,7 +331,11 @@ def pty_restart(data):
         os.execvp(cmd[0], cmd)
         os._exit(0)
     else:
-        active_ptys[sid] = {'fd': fd, 'pid': child_pid}
+        active_ptys[sid] = {
+            'fd': fd, 
+            'pid': child_pid,
+            'decoder': codecs.getincrementaldecoder('utf-8')()
+        }
         try:
             set_winsize(fd, rows, cols)
         except Exception:
@@ -445,7 +454,10 @@ def list_gemini_sessions():
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        return jsonify({"output": result.stdout, "error": result.stderr})
+        return jsonify({
+            "output": result.stdout, 
+            "error": result.stderr if result.returncode != 0 else None
+        })
     except subprocess.TimeoutExpired:
         return jsonify({"error": "Timeout listing sessions"}), 504
     except Exception as e:
