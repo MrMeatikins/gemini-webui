@@ -190,7 +190,9 @@ def start_gemini(resume=False, rows=24, cols=80, ssh_target=None, ssh_dir=None):
         
         if ssh_target:
             # Start via SSH. -t forces pty allocation for the remote process.
-            remote_cmd = f"cd {ssh_dir} && gemini" if ssh_dir else "gemini"
+            # Explicitly export TERM and COLORTERM to ensure the remote session supports colors.
+            remote_env = "export TERM=xterm-256color; export COLORTERM=truecolor;"
+            remote_cmd = f"{remote_env} cd {ssh_dir} && gemini" if ssh_dir else f"{remote_env} gemini"
             if resume:
                 remote_cmd += " -r"
             cmd = ['ssh', '-t', ssh_target, remote_cmd]
