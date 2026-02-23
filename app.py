@@ -8,7 +8,16 @@ import termios
 import re
 import logging # Added for secure logging
 from functools import wraps
-from flask import Flask, render_template, request, Response, session
+import select
+import signal
+import struct
+import fcntl
+import termios
+import re
+import logging # Added for secure logging
+import codecs
+from functools import wraps
+from flask import Flask, render_template, request, Response, session, send_from_directory
 from flask_socketio import SocketIO, disconnect
 from flask_talisman import Talisman # Added for security headers
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -25,13 +34,14 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Handle proxy headers (X-Forwarded-For, X-Forwarded-Proto, etc.)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+# We trust one level of proxy (x_proto=1, x_for=1)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
 # SECURITY PARADIGM: Defense in Depth (Secure Cookies)
 # Session cookies are locked down to prevent theft via XSS (HttpOnly) 
 # and ensure they are only sent over HTTPS (Secure).
 app.config.update(
-    SECRET_KEY=os.environ.get('SECRET_KEY', os.urandom(24).hex()),
+    SECRET_KEY=os.environ.get('SECRET_KEY', 'stable-fallback-key-change-me'),
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_SAMESITE='Lax',
@@ -79,7 +89,8 @@ FALLBACK_DOMAIN = os.environ.get('FALLBACK_DOMAIN', 'activedirectory.adamoutler.
 
 @app.route('/favicon.ico')
 def favicon():
-    return Response(status=204)
+    # Return 404 for favicon to stop redirect loops in some proxy configs
+    return Response(status=404)
 
 def sanitize_ldap_input(input_str):
     # SECURITY PARADIGM: Input Sanitization
@@ -162,15 +173,18 @@ def set_winsize(fd, row, col, xpix=0, ypix=0):
 def read_and_forward_pty_output():
     global fd
     max_read_bytes = 1024 * 20
+    decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
     while True:
         if fd:
             try:
                 timeout_sec = 0.1
                 (data_ready, _, _) = select.select([fd], [], [], timeout_sec)
                 if data_ready:
-                    output = os.read(fd, max_read_bytes).decode('utf-8', 'replace')
-                    if output:
-                        socketio.emit("pty-output", {"output": output})
+                    raw_data = os.read(fd, max_read_bytes)
+                    if raw_data:
+                        output = decoder.decode(raw_data)
+                        if output:
+                            socketio.emit("pty-output", {"output": output})
             except Exception as e:
                 pass
         socketio.sleep(0.01)
@@ -187,12 +201,18 @@ def start_gemini(resume=False):
     child_pid, fd = pty.fork()
     if child_pid == 0:
         os.environ['TERM'] = 'xterm-256color'
+        os.environ['COLORTERM'] = 'truecolor'
         cmd = ['gemini']
         if resume:
             cmd.append('-r')
         os.execvp('gemini', cmd)
         os._exit(0)
     else:
+        # Set a default initial size to avoid rendering issues before client connects
+        try:
+            set_winsize(fd, 24, 80)
+        except:
+            pass
         pass
 
 @app.route('/')
