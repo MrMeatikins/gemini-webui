@@ -20,11 +20,11 @@
         <label style="color: white; display: flex; align-items: center; gap: 5px; margin-right: 10px;">
             <input type="checkbox" id="resume-toggle" checked> Resume
         </label>
-        <button onclick="updateStatus('local'); term.clear(); socket.emit('restart', {resume: document.getElementById('resume-toggle').checked, cols: term.cols, rows: term.rows})">Restart Local</button>
+        <button onclick="localStorage.setItem('gemini-session', JSON.stringify({type: 'local'})); updateStatus('local'); term.clear(); socket.emit('restart', {resume: document.getElementById('resume-toggle').checked, cols: term.cols, rows: term.rows})">Restart Local</button>
         
         <input type="text" id="ssh-target" placeholder="user@host" value="{{ default_target }}" style="background:#444; color:white; border:1px solid #666; padding:5px; width:200px; margin-left: 20px;">
         <input type="text" id="ssh-dir" placeholder="/folder" value="{{ default_dir }}" style="background:#444; color:white; border:1px solid #666; padding:5px; width:150px;">
-        <button onclick="updateStatus(document.getElementById('ssh-target').value); term.clear(); socket.emit('restart', {resume: document.getElementById('resume-toggle').checked, cols: term.cols, rows: term.rows, ssh_target: document.getElementById('ssh-target').value, ssh_dir: document.getElementById('ssh-dir').value})">Restart SSH</button>
+        <button onclick="const target=document.getElementById('ssh-target').value; const dir=document.getElementById('ssh-dir').value; localStorage.setItem('gemini-session', JSON.stringify({type: 'ssh', ssh_target: target, ssh_dir: dir})); updateStatus(target); term.clear(); socket.emit('restart', {resume: document.getElementById('resume-toggle').checked, cols: term.cols, rows: term.rows, ssh_target: target, ssh_dir: dir})">Restart SSH</button>
         
         <button onclick="openSettings()" style="background: #2472c8;">Settings</button>
 
@@ -78,9 +78,6 @@
             }
         }
 
-        // Initialize status with default target
-        updateStatus('{{ default_target }}');
-
         var term = new Terminal({
             cursorBlink: true,
             macOptionIsMeta: true,
@@ -132,6 +129,31 @@
 
         socket.on('connect', function() {
             term.write('\r\n*** Connected to backend ***\r\n');
+            
+            // Auto-resume from localStorage
+            const lastSession = JSON.parse(localStorage.getItem('gemini-session') || '{}');
+            const resume = document.getElementById('resume-toggle').checked;
+            
+            if (lastSession.type === 'ssh') {
+                updateStatus(lastSession.ssh_target);
+                document.getElementById('ssh-target').value = lastSession.ssh_target || '{{ default_target }}';
+                document.getElementById('ssh-dir').value = lastSession.ssh_dir || '{{ default_dir }}';
+                socket.emit('restart', {
+                    resume: resume,
+                    cols: term.cols,
+                    rows: term.rows,
+                    ssh_target: lastSession.ssh_target,
+                    ssh_dir: lastSession.ssh_dir
+                });
+            } else {
+                updateStatus('local');
+                socket.emit('restart', {
+                    resume: resume,
+                    cols: term.cols,
+                    rows: term.rows
+                });
+            }
+
             // Give the DOM a moment to settle before final fit
             setTimeout(() => {
                 fitAddon.fit();

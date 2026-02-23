@@ -314,12 +314,6 @@ def add_ssh_key():
         return jsonify({"status": "error", "message": "No selected file"}), 400
     
     filename = secure_filename(file.filename)
-    save_path = os.path.join(SSH_DIR, filename)
-    file.save(save_path)
-    os.chmod(save_path, 0o600)
-    
-    return jsonify({"status": "success", "filename": filename})
-
 @app.route('/api/keys/text', methods=['POST'])
 @authenticated_only
 def add_ssh_key_text():
@@ -340,6 +334,10 @@ def add_ssh_key_text():
     os.chmod(save_path, 0o600)
     
     return jsonify({"status": "success", "filename": name})
+
+@app.route('/api/health')
+def health_check():
+    return jsonify({"status": "ok", "child_pid": child_pid})
 
 @socketio.on('pty-input')
 @authenticated_only
@@ -369,6 +367,16 @@ def handle_restart(data):
     cols = data.get('cols', 80)
     ssh_target = data.get('ssh_target')
     ssh_dir = data.get('ssh_dir')
+    
+    # If already running with same config, just resize
+    global current_config, child_pid
+    if child_pid and \
+       current_config.get('ssh_target') == ssh_target and \
+       current_config.get('ssh_dir') == ssh_dir and \
+       current_config.get('resume') == resume:
+        set_winsize(fd, rows, cols)
+        return
+
     start_gemini(resume, rows=rows, cols=cols, ssh_target=ssh_target, ssh_dir=ssh_dir)
 
 def monitor_gemini():
