@@ -32,7 +32,7 @@ pipeline {
                     # Setup virtual environment and install dependencies
                     ./setup_dev.sh
                     # Run tests
-                    .venv/bin/pytest -s tests/test_ui.py
+                    PYTHONPATH=. .venv/bin/pytest -s tests/test_api.py tests/test_ui.py
                 '''
             }
         }
