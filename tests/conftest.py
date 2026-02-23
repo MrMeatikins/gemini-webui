@@ -36,14 +36,26 @@ def server(test_data_dir):
         [python_bin, "src/app.py"],
         env=env,
         cwd=project_root,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        # stdout=subprocess.DEVNULL,
+        # stderr=subprocess.DEVNULL,
         preexec_fn=os.setsid
     )
     
-    time.sleep(5)
-    if process.poll() is not None:
-        pytest.fail("Server failed to start")
+    # Wait for server to be ready
+    import requests
+    max_retries = 20
+    for i in range(max_retries):
+        try:
+            resp = requests.get(f"http://127.0.0.1:{port}/api/health", timeout=1)
+            if resp.status_code == 200:
+                break
+        except Exception:
+            pass
+        time.sleep(1)
+        if process.poll() is not None:
+            pytest.fail("Server failed to start")
+    else:
+        pytest.fail("Server health check timed out")
     
     yield f"http://127.0.0.1:{port}"
     

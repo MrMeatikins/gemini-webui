@@ -76,6 +76,11 @@ The project uses **Pytest** and **Playwright**.
 2. Run tests: `pytest tests/test_ui.py`.
 *Note: The tests use a mock Gemini binary located in `tests/mock/gemini` to verify terminal flow without consuming real API tokens.*
 
+**Testing Mandates:**
+- **Performance**: Individual tests must NEVER take longer than 10 seconds.
+- **Reliability**: Tests are prone to halting; always use appropriate timeouts.
+- **Safety**: NEVER DISABLE TIMEOUTS.
+
 ---
 
 ## 6. Orientation for Future Gemini Agents

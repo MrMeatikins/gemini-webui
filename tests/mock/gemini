@@ -5,6 +5,11 @@ import json
 
 STATE_FILE = "gemini_mock_state.json"
 
+if "--list-sessions" in sys.argv:
+    print("Available sessions for this project (1):")
+    print("  1. Mock Session (Just now) [mock-uuid]")
+    sys.exit(0)
+
 print("Welcome to Fake Gemini")
 sys.stdout.flush()
 
