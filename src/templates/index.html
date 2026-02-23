@@ -20,11 +20,13 @@
         <label style="color: white; display: flex; align-items: center; gap: 5px; margin-right: 10px;">
             <input type="checkbox" id="resume-toggle" checked> Resume
         </label>
-        <button onclick="term.clear(); socket.emit('restart', {resume: document.getElementById('resume-toggle').checked, cols: term.cols, rows: term.rows})">Restart Local</button>
+        <button onclick="updateStatus('local'); term.clear(); socket.emit('restart', {resume: document.getElementById('resume-toggle').checked, cols: term.cols, rows: term.rows})">Restart Local</button>
         
         <input type="text" id="ssh-target" placeholder="user@host" value="{{ default_target }}" style="background:#444; color:white; border:1px solid #666; padding:5px; width:200px; margin-left: 20px;">
         <input type="text" id="ssh-dir" placeholder="/folder" value="{{ default_dir }}" style="background:#444; color:white; border:1px solid #666; padding:5px; width:150px;">
-        <button onclick="term.clear(); socket.emit('restart', {resume: document.getElementById('resume-toggle').checked, cols: term.cols, rows: term.rows, ssh_target: document.getElementById('ssh-target').value, ssh_dir: document.getElementById('ssh-dir').value})">Restart SSH</button>
+        <button onclick="updateStatus(document.getElementById('ssh-target').value); term.clear(); socket.emit('restart', {resume: document.getElementById('resume-toggle').checked, cols: term.cols, rows: term.rows, ssh_target: document.getElementById('ssh-target').value, ssh_dir: document.getElementById('ssh-dir').value})">Restart SSH</button>
+        
+        <div id="connection-status" style="margin-left: auto; color: #0dbc79; font-weight: bold; font-family: monospace; padding: 5px 10px;"></div>
     </div>
     <div id="terminal-container"></div>
     
@@ -33,6 +35,22 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js" integrity="sha256-EPMZTF8XwXhvt9XbhlweyFObZzajGAY/04var3xGhI8=" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha256-y6ZcVexS2AE/5ykFy1hqui8oXHHkKXk1CDE4x43QsDs=" crossorigin="anonymous"></script>
     <script>
+        function updateStatus(target) {
+            const statusEl = document.getElementById('connection-status');
+            if (target === 'local' || !target) {
+                statusEl.innerText = 'local';
+                statusEl.style.color = '#2472c8';
+            } else {
+                // Extract hostname from user@host
+                const host = target.split('@').pop();
+                statusEl.innerText = 'ssh: ' + host;
+                statusEl.style.color = '#0dbc79';
+            }
+        }
+
+        // Initialize status with default target
+        updateStatus('{{ default_target }}');
+
         var term = new Terminal({
             cursorBlink: true,
             macOptionIsMeta: true,
