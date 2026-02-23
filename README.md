@@ -13,6 +13,18 @@ Gemini WebUI provides a high-fidelity, persistent web interface for the Gemini C
 
 ---
 
+## 🏗 Architecture
+
+```mermaid
+graph TD
+    User([User Browser]) -- WebSockets --> App[Docker Container: Flask App]
+    App --> Local[Local Gemini CLI]
+    App -- SSH --> Remote[Remote Host]
+    Remote --> RemoteGemini[Remote Gemini CLI]
+```
+
+---
+
 ## 🧠 Expected Behaviors
 
 ### Navigating Away
