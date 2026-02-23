@@ -8,11 +8,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN apt-get update && apt-get install -y \
     openssh-client \
     curl \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Assuming gemini is installed via pip or a script, but we need it available.
-# Since it's a CLI tool, let's install it globally if we can.
-RUN curl -L https://github.com/openclaw/gemini-cli/releases/latest/download/gemini-linux-amd64 -o /usr/local/bin/gemini && chmod +x /usr/local/bin/gemini
+# Install Gemini CLI via npm to ensure architecture compatibility (arm64/amd64)
+RUN npm install -g @google/gemini-cli
 
 COPY . .
 
