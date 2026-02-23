@@ -39,7 +39,5 @@ COPY id_ed25519 /home/node/.ssh/id_ed25519
 RUN chmod 600 /home/node/.ssh/id_ed25519 && \
     chown -R node:node /home/node/.ssh
 
-USER node
-
 # We need access to the mounted volume for the host
 CMD ["python", "src/app.py"]
