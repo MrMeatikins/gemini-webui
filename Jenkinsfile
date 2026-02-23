@@ -24,16 +24,26 @@ pipeline {
         
         stage('Deploy Gemini WebUI') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'GOOGLE_API_KEY', variable: 'GEMINI_API_KEY'),
-                    string(credentialsId: 'GEMINI_WEBUI_SECRET_KEY', variable: 'SECRET_KEY'),
-                    usernamePassword(credentialsId: 'ldap-bind-auth-user', passwordVariable: 'AD_BIND_PASS', usernameVariable: 'AD_BIND_USER_DN')
-                ]) {
-                    script {
-                        env.ALLOWED_ORIGINS = "https://gemini.hackedyour.info"
+                script {
+                    // Define credentials, but we'll handle missing ones gracefully
+                    def creds = [
+                        string(credentialsId: 'GOOGLE_API_KEY', variable: 'GEMINI_API_KEY'),
+                        usernamePassword(credentialsId: 'ldap-bind-auth-user', passwordVariable: 'AD_BIND_PASS', usernameVariable: 'AD_BIND_USER_DN')
+                    ]
+                    
+                    // Attempt to add the secret key if it exists
+                    try {
+                        creds << string(credentialsId: 'GEMINI_WEBUI_SECRET_KEY', variable: 'SECRET_KEY')
+                    } catch (e) {
+                        echo "Warning: GEMINI_WEBUI_SECRET_KEY not found, using a per-build random key."
+                        env.SECRET_KEY = java.util.UUID.randomUUID().toString()
                     }
-                    sh 'docker compose down || true'
-                    sh 'docker compose up --build -d'
+
+                    withCredentials(creds) {
+                        env.ALLOWED_ORIGINS = "https://gemini.hackedyour.info"
+                        sh 'docker compose down || true'
+                        sh 'docker compose up --build -d'
+                    }
                 }
             }
         }
