@@ -35,8 +35,8 @@ pipeline {
 
                     withCredentials([
                         string(credentialsId: 'GOOGLE_API_KEY', variable: 'GEMINI_API_KEY'),
-                        usernamePassword(credentialsId: 'ldap-bind-auth-user', passwordVariable: 'AD_BIND_PASS', usernameVariable: 'AD_BIND_USER_DN'),
-                        sshUserPrivateKey(credentialsId: 'adamoutler-inferrence1-login-key', keyFileVariable: 'PRIVATE_KEY', usernameVariable: 'USERNAME')
+                        sshUserPrivateKey(credentialsId: 'adamoutler-inferrence1-login-key', keyFileVariable: 'PRIVATE_KEY', usernameVariable: 'USERNAME'),
+                        usernamePassword(credentialsId: 'ldap-bind-auth-user', passwordVariable: 'AD_BIND_PASS', usernameVariable: 'AD_BIND_USER_DN')
                     ]) {
                         sh 'cp $PRIVATE_KEY id_ed25519'
                         sh "sed -i 's/\\\${USERNAME}/$USERNAME/g' GEMINI.md"
@@ -53,11 +53,15 @@ pipeline {
     
     post {
         always {
-            sh 'docker compose ps'
             script {
                 env.BUILD_RESULT = currentBuild.currentResult
             }
-            withCredentials([string(credentialsId: 'Adam-Jenkins-Token', variable: 'ADAM_TOKEN')]) {
+            withCredentials([
+                string(credentialsId: 'Adam-Jenkins-Token', variable: 'ADAM_TOKEN'),
+                string(credentialsId: 'GOOGLE_API_KEY', variable: 'GEMINI_API_KEY'),
+                usernamePassword(credentialsId: 'ldap-bind-auth-user', passwordVariable: 'AD_BIND_PASS', usernameVariable: 'AD_BIND_USER_DN')
+            ]) {
+                sh 'docker compose ps'
                 sh '''
                     curl -sL -u "adamoutler@gmail.com:$ADAM_TOKEN" "${BUILD_URL}consoleText" > /tmp/jenkins-receipt-gemini-webui.log
                     echo "Finished: $BUILD_RESULT #$BUILD_NUMBER" >> /tmp/jenkins-receipt-gemini-webui.log
