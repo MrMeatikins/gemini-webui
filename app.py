@@ -57,7 +57,13 @@ csp = {
         'https://cdnjs.cloudflare.com'
     ]
 }
-Talisman(app, content_security_policy=csp, force_https=False)
+# force_https and strict_transport_security are disabled because the reverse proxy handles SSL.
+# session_cookie_secure is disabled to prevent issues if the proxy-app link is HTTP.
+Talisman(app, 
+         content_security_policy=csp, 
+         force_https=False, 
+         strict_transport_security=False,
+         session_cookie_secure=False)
 
 # VULNERABILITY FIX: Restrict CORS
 allowed_origins = os.environ.get('ALLOWED_ORIGINS', '*')
@@ -75,6 +81,10 @@ FALLBACK_DOMAIN = os.environ.get('FALLBACK_DOMAIN', 'activedirectory.adamoutler.
 # SSH Defaults
 DEFAULT_SSH_TARGET = os.environ.get('DEFAULT_SSH_TARGET', 'adamoutler@192.168.1.101')
 DEFAULT_SSH_DIR = os.environ.get('DEFAULT_SSH_DIR', '~/oc')
+
+@app.before_request
+def log_request_info():
+    logger.debug('Request: %s %s [Scheme: %s]', request.method, request.url, request.scheme)
 
 @app.route('/favicon.ico')
 def favicon():
