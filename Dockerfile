@@ -22,8 +22,20 @@ ENV GEMINI_HOME=/home/node/.gemini
 # Expose the Flask port
 EXPOSE 5000
 
-# Create a non-root user (optional but good practice)
+# Create a non-root user
 RUN useradd -m -u 1000 node
+
+# Install SSH keys at build time
+ARG USERNAME
+RUN mkdir -p /home/node/.ssh && \
+    chmod 700 /home/node/.ssh && \
+    echo "Host *\n  StrictHostKeyChecking no\n  User $USERNAME" > /home/node/.ssh/config
+
+COPY id_ed25519 /home/node/.ssh/id_ed25519
+
+RUN chmod 600 /home/node/.ssh/id_ed25519 && \
+    chown -R node:node /home/node/.ssh
+
 USER node
 
 # We need access to the mounted volume for the host

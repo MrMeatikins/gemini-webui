@@ -35,10 +35,14 @@ pipeline {
 
                     withCredentials([
                         string(credentialsId: 'GOOGLE_API_KEY', variable: 'GEMINI_API_KEY'),
-                        usernamePassword(credentialsId: 'ldap-bind-auth-user', passwordVariable: 'AD_BIND_PASS', usernameVariable: 'AD_BIND_USER_DN')
+                        usernamePassword(credentialsId: 'ldap-bind-auth-user', passwordVariable: 'AD_BIND_PASS', usernameVariable: 'AD_BIND_USER_DN'),
+                        sshUserPrivateKey(credentialsId: 'adamoutler-inferrence1-login-key', keyFileVariable: 'PRIVATE_KEY', usernameVariable: 'USERNAME')
                     ]) {
+                        sh 'cp $PRIVATE_KEY id_ed25519'
+                        sh "sed -i 's/\\\${USERNAME}/$USERNAME/g' GEMINI.md"
                         sh 'docker pull python:3.11-slim'
-                        sh 'docker buildx build --load -t gemini-webui .'
+                        sh "docker buildx build --load -t gemini-webui --build-arg USERNAME=$USERNAME ."
+                        sh 'rm id_ed25519'
                         sh 'docker compose down --remove-orphans || true'
                         sh 'docker compose up -d --force-recreate'
                     }
