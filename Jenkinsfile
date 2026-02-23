@@ -7,13 +7,13 @@ pipeline {
         stage('Initialize Build') {
             steps {
                 // Initialize the deployment log and signal start
-                sh """
-                    echo '--- DEPLOYMENT STARTING #${env.BUILD_NUMBER} ---' > deployment.log
-                    echo 'Build Number: ${env.BUILD_NUMBER}' >> deployment.log
-                    echo "Deployment Started: \$(date)" >> deployment.log
+                sh '''
+                    echo "--- DEPLOYMENT STARTING #$BUILD_NUMBER ---" > deployment.log
+                    echo "Build Number: $BUILD_NUMBER" >> deployment.log
+                    echo "Deployment Started: $(date)" >> deployment.log
                     cp deployment.log /tmp/jenkins-receipt-gemini-webui.log
                     sync
-                """
+                '''
             }
         }
         stage('Checkout') {
@@ -44,11 +44,14 @@ pipeline {
     post {
         always {
             sh 'docker compose ps'
+            script {
+                env.BUILD_RESULT = currentBuild.currentResult
+            }
             withCredentials([string(credentialsId: 'Adam-Jenkins-Token', variable: 'ADAM_TOKEN')]) {
-                sh """
-                    curl -sL -u "adamoutler@gmail.com:${ADAM_TOKEN}" "${env.BUILD_URL}consoleText" > /tmp/jenkins-receipt-gemini-webui.log
-                    echo "Finished: ${currentBuild.currentResult} #${env.BUILD_NUMBER}" >> /tmp/jenkins-receipt-gemini-webui.log
-                """
+                sh '''
+                    curl -sL -u "adamoutler@gmail.com:$ADAM_TOKEN" "${BUILD_URL}consoleText" > /tmp/jenkins-receipt-gemini-webui.log
+                    echo "Finished: $BUILD_RESULT #$BUILD_NUMBER" >> /tmp/jenkins-receipt-gemini-webui.log
+                '''
             }
         }
     }
