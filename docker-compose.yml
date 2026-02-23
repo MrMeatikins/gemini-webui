@@ -18,5 +18,9 @@ services:
     volumes:
       - ./data:/data
       - ~/Gemini:/app/Gemini
-      - ~/.gemini:/home/node/.gemini
+      # - ~/.gemini:/home/node/.gemini # Host mount example
+      - gemini-state:/home/node/.gemini
     restart: unless-stopped
+
+volumes:
+  gemini-state:

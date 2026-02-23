@@ -65,7 +65,12 @@ def get_config():
         "DEFAULT_SSH_TARGET": DEFAULT_SSH_TARGET,
         "DEFAULT_SSH_DIR": DEFAULT_SSH_DIR,
         "SECRET_KEY": os.environ.get('SECRET_KEY', 'stable-fallback-key-change-me'),
-        "ALLOWED_ORIGINS": os.environ.get('ALLOWED_ORIGINS', '*')
+        "ALLOWED_ORIGINS": os.environ.get('ALLOWED_ORIGINS', '*'),
+        "HOSTS": [
+            { "label": 'Local Box', "type": 'local' },
+            { "label": 'OC Box (101)', "type": 'ssh', "target": 'adamoutler@192.168.1.101', "dir": '~/oc' },
+            { "label": 'WebUI Dev (101)', "type": 'ssh', "target": 'adamoutler@192.168.1.101', "dir": '~/gemini-webui' }
+        ]
     }
     
     if os.path.exists(config_file):
@@ -86,6 +91,19 @@ def init_app():
     data_dir, config_file, ssh_dir = get_config_paths()
     logger.info(f"Initializing app with DATA_DIR: {data_dir}")
     os.makedirs(ssh_dir, mode=0o700, exist_ok=True)
+    
+    # Ensure permanent storage for gemini CLI state
+    gemini_data = os.path.join(data_dir, ".gemini")
+    os.makedirs(gemini_data, mode=0o700, exist_ok=True)
+    home_gemini = os.path.expanduser("~/.gemini")
+    if not os.path.islink(home_gemini) and not os.path.exists(home_gemini):
+        try:
+            os.symlink(gemini_data, home_gemini)
+            logger.info(f"Linked {home_gemini} to {gemini_data}")
+        except Exception as e:
+            logger.error(f"Failed to symlink .gemini: {e}")
+    elif not os.path.islink(home_gemini) and os.path.isdir(home_gemini):
+        logger.warning(f"{home_gemini} exists and is not a link. Permanent storage in /data might not be active.")
     
     config = get_config()
     LDAP_SERVER = config.get('LDAP_SERVER')
@@ -347,6 +365,38 @@ def index():
     return render_template('index.html', 
                           default_target=DEFAULT_SSH_TARGET, 
                           default_dir=DEFAULT_SSH_DIR)
+
+@app.route('/api/hosts', methods=['GET'])
+@authenticated_only
+def list_hosts():
+    return jsonify(get_config().get('HOSTS', []))
+
+@app.route('/api/hosts', methods=['POST'])
+@authenticated_only
+def add_host():
+    new_host = request.json
+    curr_conf = get_config()
+    hosts = curr_conf.get('HOSTS', [])
+    hosts.append(new_host)
+    curr_conf['HOSTS'] = hosts
+    
+    _, config_file, _ = get_config_paths()
+    with open(config_file, 'w') as f:
+        json.dump(curr_conf, f, indent=4)
+    return jsonify({"status": "success"})
+
+@app.route('/api/hosts/<label>', methods=['DELETE'])
+@authenticated_only
+def remove_host(label):
+    curr_conf = get_config()
+    hosts = curr_conf.get('HOSTS', [])
+    hosts = [h for h in hosts if h['label'] != label]
+    curr_conf['HOSTS'] = hosts
+    
+    _, config_file, _ = get_config_paths()
+    with open(config_file, 'w') as f:
+        json.dump(curr_conf, f, indent=4)
+    return jsonify({"status": "success"})
 
 @app.route('/api/config', methods=['GET'])
 @authenticated_only
