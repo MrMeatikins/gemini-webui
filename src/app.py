@@ -48,10 +48,31 @@ app = Flask(__name__, template_folder=template_dir)
 # Handle proxy headers (X-Forwarded-For, X-Forwarded-Proto, etc.)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
-# Multi-tab support: sid -> {'fd': fd, 'pid': pid, 'decoder': decoder}
-active_ptys = {}
+# Multi-tab support and persistence
+persistent_ptys = {}  # tab_id -> {'fd': fd, 'pid': pid, 'decoder': decoder, 'last_seen': time}
+sid_to_tabid = {}
+tabid_to_sid = {}
+orphaned_ptys = {}    # tab_id -> timestamp
+
 # Background session cache: key -> {"output": str, "error": str, "timestamp": float}
 session_results_cache = {}
+
+def cleanup_orphaned_ptys():
+    """Periodically kills PTYs that have been orphaned for too long."""
+    while True:
+        socketio.sleep(10)
+        now = time.time()
+        for tab_id, ts in list(orphaned_ptys.items()):
+            if now - ts > 60:  # 60 second grace period
+                logger.info(f"Cleaning up orphaned PTY for tab: {tab_id}")
+                pty_info = persistent_ptys.pop(tab_id, None)
+                orphaned_ptys.pop(tab_id, None)
+                if pty_info:
+                    try:
+                        os.kill(pty_info['pid'], signal.SIGKILL)
+                        os.waitpid(pty_info['pid'], 0)
+                    except Exception:
+                        pass
 
 def get_config_paths():
     data_dir = app.config.get('DATA_DIR', os.environ.get('DATA_DIR', "/data"))
@@ -185,13 +206,12 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     sid = request.sid
-    if sid in active_ptys:
-        pty_info = active_ptys.pop(sid)
-        try:
-            os.kill(pty_info['pid'], signal.SIGKILL)
-            os.waitpid(pty_info['pid'], 0)
-        except Exception:
-            pass
+    tab_id = sid_to_tabid.pop(sid, None)
+    if tab_id:
+        tabid_to_sid.pop(tab_id, None)
+        if tab_id in persistent_ptys:
+            logger.info(f"PTY orphaned for tab_id: {tab_id} (sid: {sid})")
+            orphaned_ptys[tab_id] = time.time()
 
 @app.before_request
 def require_auth():
@@ -221,19 +241,24 @@ def read_and_forward_pty_output():
     max_read_bytes = 1024 * 20
     while True:
         socketio.sleep(0.01)
-        for sid, pty_info in list(active_ptys.items()):
+        for tab_id, pty_info in list(persistent_ptys.items()):
             fd = pty_info['fd']
             decoder = pty_info['decoder']
+            sid = tabid_to_sid.get(tab_id)
             try:
                 (data_ready, _, _) = select.select([fd], [], [], 0)
                 if data_ready:
                     output = os.read(fd, max_read_bytes)
                     if output:
                         decoded_output = decoder.decode(output)
-                        if decoded_output:
+                        if decoded_output and sid:
                             socketio.emit('pty-output', {'output': decoded_output}, room=sid)
             except (OSError, IOError, EOFError):
-                active_ptys.pop(sid, None)
+                persistent_ptys.pop(tab_id, None)
+                orphaned_ptys.pop(tab_id, None)
+                if sid:
+                    sid_to_tabid.pop(sid, None)
+                    tabid_to_sid.pop(tab_id, None)
 
 def fetch_sessions_for_host(host):
     """Internal helper to fetch sessions for a host config."""
@@ -282,28 +307,49 @@ def background_session_preloader():
 @socketio.on('pty-input')
 def pty_input(data):
     sid = request.sid
-    if sid in active_ptys:
-        os.write(active_ptys[sid]['fd'], data['input'].encode())
+    tab_id = sid_to_tabid.get(sid)
+    if tab_id in persistent_ptys:
+        os.write(persistent_ptys[tab_id]['fd'], data['input'].encode())
 
 @socketio.on('resize')
 def pty_resize(data):
     sid = request.sid
-    if sid in active_ptys:
+    tab_id = sid_to_tabid.get(sid)
+    if tab_id in persistent_ptys:
         try:
-            set_winsize(active_ptys[sid]['fd'], data['rows'], data['cols'])
+            set_winsize(persistent_ptys[tab_id]['fd'], data['rows'], data['cols'])
         except Exception:
             pass
 
 @socketio.on('restart')
 def pty_restart(data):
     sid = request.sid
-    if sid in active_ptys:
-        pty_info = active_ptys.pop(sid)
-        try:
-            os.kill(pty_info['pid'], signal.SIGKILL)
-            os.waitpid(pty_info['pid'], 0)
-        except Exception:
-            pass
+    tab_id = data.get('tab_id')
+    if not tab_id:
+        return
+        
+    # Associate SID with Tab ID
+    sid_to_tabid[sid] = tab_id
+    tabid_to_sid[tab_id] = sid
+    
+    # If we already have a PTY for this tab, check if we should reuse it
+    if tab_id in persistent_ptys:
+        if orphaned_ptys.pop(tab_id, None):
+            logger.info(f"Reattached to orphaned PTY for tab: {tab_id}")
+            # Send a clear-ish screen or some marker to indicate reattachment
+            socketio.emit('pty-output', {'output': '\r\n[Reattached]\r\n'}, room=sid)
+            # Re-sync terminal size
+            try:
+                set_winsize(persistent_ptys[tab_id]['fd'], data.get('rows', 24), data.get('cols', 80))
+            except Exception: pass
+            return
+        else:
+            # Explicit restart requested for an active session
+            pty_info = persistent_ptys.pop(tab_id)
+            try:
+                os.kill(pty_info['pid'], signal.SIGKILL)
+                os.waitpid(pty_info['pid'], 0)
+            except Exception: pass
             
     resume = data.get('resume', True)
     cols = data.get('cols', 80)
@@ -334,10 +380,10 @@ def pty_restart(data):
         os.execvp(cmd[0], cmd)
         os._exit(0)
     else:
-        active_ptys[sid] = {'fd': fd, 'pid': child_pid, 'decoder': codecs.getincrementaldecoder('utf-8')()}
+        persistent_ptys[tab_id] = {'fd': fd, 'pid': child_pid, 'decoder': codecs.getincrementaldecoder('utf-8')()}
         try: set_winsize(fd, rows, cols)
         except Exception: pass
-        socketio.emit('pty-output', {'output': '\r\n*** Process started ***\r\n'}, room=sid)
+        socketio.emit('pty-output', {'output': '\r\nLoading Context...\r\n'}, room=sid)
 
 @app.route('/')
 def index():
@@ -459,6 +505,7 @@ def health_check():
 if __name__ == '__main__':
     init_app()
     socketio.start_background_task(read_and_forward_pty_output)
+    socketio.start_background_task(cleanup_orphaned_ptys)
     if os.environ.get('SKIP_PRELOADER') != 'true':
         socketio.start_background_task(background_session_preloader)
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)

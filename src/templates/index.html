@@ -270,7 +270,7 @@
             const termDiv = document.createElement('div'); termDiv.className = 'terminal-instance'; container.appendChild(termDiv);
             
             const isMobile = window.innerWidth <= 768;
-            const fontSize = isMobile ? 16 : 14;
+            const fontSize = isMobile ? 13 : 14;
 
             tab.term = new Terminal({ 
                 cursorBlink: true, 
@@ -280,7 +280,9 @@
                 fontSize: fontSize, 
                 fontFamily: 'Menlo, Monaco, "Courier New", monospace', 
                 allowProposedApi: true, 
-                theme: terminalTheme 
+                theme: terminalTheme,
+                scrollOnUserInput: true,
+                scrollOnData: true
             });
             tab.fitAddon = new FitAddon.FitAddon(); tab.term.loadAddon(tab.fitAddon); tab.term.open(termDiv);
             
@@ -291,14 +293,19 @@
                 textarea.setAttribute('autocorrect', 'off');
                 textarea.setAttribute('autocapitalize', 'off');
                 textarea.setAttribute('spellcheck', 'false');
+                textarea.setAttribute('type', 'text'); // Some mobile browsers respect this more
             }
 
             tab.socket = io.connect(window.location.origin);
             tab.socket.on('connect', () => {
-                tab.socket.emit('restart', { resume: resumeParam, cols: tab.term.cols, rows: tab.term.rows, ssh_target: target, ssh_dir: dir });
-                setTimeout(() => { if (tab.fitAddon) { tab.fitAddon.fit(); tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows}); } tab.term.focus(); }, 150);
+                tab.socket.emit('restart', { tab_id: tabId, resume: resumeParam, cols: tab.term.cols, rows: tab.term.rows, ssh_target: target, ssh_dir: dir });
+                setTimeout(() => { fitTerminal(tab); tab.term.focus(); }, 150);
             });
-            tab.socket.on('pty-output', (data) => { if (tab.term) tab.term.write(data.output); });
+            tab.socket.on('pty-output', (data) => { 
+                if (tab.term) {
+                    tab.term.write(data.output);
+                }
+            });
             tab.term.onData((data) => { 
                 if (tab.socket) {
                     if (ctrlActive && data.length === 1) {
@@ -318,6 +325,20 @@
             });
             tab.term.onKey((e) => { if (e.domEvent.ctrlKey && e.domEvent.key === 'Enter') if (tab.socket) tab.socket.emit('pty-input', {input: '\x1b\r'}); });
             renderTabs(); switchTab(tabId);
+        }
+
+        function fitTerminal(tab) {
+            if (!tab || tab.state !== 'terminal' || !tab.fitAddon) return;
+            const oldCols = tab.term.cols;
+            const oldRows = tab.term.rows;
+            try {
+                tab.fitAddon.fit();
+                if (tab.term.cols !== oldCols || tab.term.rows !== oldRows) {
+                    if (tab.socket && tab.socket.connected) {
+                        tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows});
+                    }
+                }
+            } catch (e) { console.error("Fit error", e); }
         }
 
         function toggleCtrl(force) {
@@ -342,14 +363,7 @@
             if (tab && tab.term) {
                 const newSize = Math.max(8, Math.min(40, tab.term.options.fontSize + delta));
                 tab.term.options.fontSize = newSize;
-                setTimeout(() => {
-                    if (tab.fitAddon) {
-                        tab.fitAddon.fit();
-                        if (tab.socket && tab.socket.connected) {
-                            tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows});
-                        }
-                    }
-                }, 50);
+                setTimeout(() => fitTerminal(tab), 50);
             }
         }
 
@@ -368,7 +382,7 @@
                 document.getElementById('ssh-target').value = tab.session.ssh_target || '';
                 document.getElementById('ssh-dir').value = tab.session.ssh_dir || '';
                 updateStatus(tab.session.ssh_target, tab.session.ssh_dir);
-                setTimeout(() => { if (tab.fitAddon) { tab.fitAddon.fit(); tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows}); tab.term.focus(); } }, 50);
+                setTimeout(() => { fitTerminal(tab); tab.term.focus(); }, 50);
             } else { 
                 toolbarInfo.style.display = 'none'; 
                 mobileControls.style.display = 'none';
@@ -381,7 +395,7 @@
             if (tab && tab.state === 'terminal') {
                 const target = document.getElementById('ssh-target').value; const dir = document.getElementById('ssh-dir').value;
                 tab.session = { type: target ? 'ssh' : 'local', ssh_target: target, ssh_dir: dir };
-                tab.term.clear(); tab.socket.emit('restart', { resume: true, cols: tab.term.cols, rows: tab.term.rows, ssh_target: target, ssh_dir: dir });
+                tab.term.clear(); tab.socket.emit('restart', { tab_id: tab.id, resume: true, cols: tab.term.cols, rows: tab.term.rows, ssh_target: target, ssh_dir: dir });
                 updateStatus(target, dir);
             }
         }
@@ -405,7 +419,7 @@
         }
 
         const resizeObserver = new ResizeObserver(() => {
-            tabs.forEach(tab => { if (tab.state === 'terminal' && tab.fitAddon) { try { tab.fitAddon.fit(); if (tab.socket && tab.socket.connected) tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows}); } catch (e) {} } });
+            tabs.forEach(tab => fitTerminal(tab));
         });
         resizeObserver.observe(document.getElementById('terminal-container'));
 
@@ -418,17 +432,7 @@
                     const viewHeight = window.visualViewport.height;
                     document.body.style.height = viewHeight + 'px';
                     window.scrollTo(0, 0);
-                    
-                    tabs.forEach(tab => {
-                        if (tab.state === 'terminal' && tab.fitAddon) {
-                            try {
-                                tab.fitAddon.fit();
-                                if (tab.socket && tab.socket.connected) {
-                                    tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows});
-                                }
-                            } catch (e) {}
-                        }
-                    });
+                    tabs.forEach(tab => fitTerminal(tab));
                 }, 100);
             });
         }
