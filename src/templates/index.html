@@ -84,6 +84,7 @@
             -webkit-tap-highlight-color: transparent;
         }
         .control-btn:active { background: #666; }
+        .control-btn.active { background: #2472c8; border-color: #3b8eea; }
         .control-btn.danger { background: #cd3131; }
         .control-btn.danger:active { background: #f14c4c; }
 
@@ -92,7 +93,7 @@
             #ssh-target, #ssh-dir { width: 100px !important; }
             #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
             #active-connection-info { gap: 5px; }
-            body { height: 100vh; height: -webkit-fill-available; }
+            body { height: 100vh; height: -webkit-fill-available; position: fixed; width: 100%; }
         }
     </style>
 </head>
@@ -116,7 +117,7 @@
         <div class="control-btn" onclick="sendToTerminal('\x1b[C')">▶</div>
         <div class="control-btn" onclick="adjustFontSize(1)">A+</div>
         <div class="control-btn" onclick="adjustFontSize(-1)">A-</div>
-        <div class="control-btn danger" onclick="sendToTerminal('\x03')">Ctrl-C</div>
+        <div id="ctrl-toggle" class="control-btn" onclick="toggleCtrl()">Ctrl</div>
     </div>
 
     <div id="settings-modal" style="display:none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7);">
@@ -162,6 +163,7 @@
         let tabs = [];
         let activeTabId = null;
         let initialAutoResumeDone = false;
+        let ctrlActive = false;
 
         const terminalTheme = {
             background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#ffffff', selection: '#264f78',
@@ -297,9 +299,34 @@
                 setTimeout(() => { if (tab.fitAddon) { tab.fitAddon.fit(); tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows}); } tab.term.focus(); }, 150);
             });
             tab.socket.on('pty-output', (data) => { if (tab.term) tab.term.write(data.output); });
-            tab.term.onData((data) => { if (tab.socket) tab.socket.emit('pty-input', {input: data}); });
+            tab.term.onData((data) => { 
+                if (tab.socket) {
+                    if (ctrlActive && data.length === 1) {
+                        const code = data.charCodeAt(0);
+                        if (code >= 97 && code <= 122) { // a-z
+                            tab.socket.emit('pty-input', {input: String.fromCharCode(code - 96)});
+                        } else if (code >= 65 && code <= 90) { // A-Z
+                            tab.socket.emit('pty-input', {input: String.fromCharCode(code - 64)});
+                        } else {
+                            tab.socket.emit('pty-input', {input: data});
+                        }
+                        toggleCtrl(false);
+                    } else {
+                        tab.socket.emit('pty-input', {input: data});
+                    }
+                }
+            });
             tab.term.onKey((e) => { if (e.domEvent.ctrlKey && e.domEvent.key === 'Enter') if (tab.socket) tab.socket.emit('pty-input', {input: '\x1b\r'}); });
             renderTabs(); switchTab(tabId);
+        }
+
+        function toggleCtrl(force) {
+            ctrlActive = force !== undefined ? force : !ctrlActive;
+            const btn = document.getElementById('ctrl-toggle');
+            if (ctrlActive) btn.classList.add('active');
+            else btn.classList.remove('active');
+            const tab = tabs.find(t => t.id === activeTabId);
+            if (tab && tab.term) tab.term.focus();
         }
 
         function sendToTerminal(data) {
@@ -384,21 +411,25 @@
 
         // Handle mobile keyboard resizing using Visual Viewport API
         if (window.visualViewport) {
+            let resizeTimeout;
             window.visualViewport.addEventListener('resize', () => {
-                const viewHeight = window.visualViewport.height;
-                document.body.style.height = viewHeight + 'px';
-                window.scrollTo(0, 0);
-                
-                tabs.forEach(tab => {
-                    if (tab.state === 'terminal' && tab.fitAddon) {
-                        try {
-                            tab.fitAddon.fit();
-                            if (tab.socket && tab.socket.connected) {
-                                tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows});
-                            }
-                        } catch (e) {}
-                    }
-                });
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    const viewHeight = window.visualViewport.height;
+                    document.body.style.height = viewHeight + 'px';
+                    window.scrollTo(0, 0);
+                    
+                    tabs.forEach(tab => {
+                        if (tab.state === 'terminal' && tab.fitAddon) {
+                            try {
+                                tab.fitAddon.fit();
+                                if (tab.socket && tab.socket.connected) {
+                                    tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows});
+                                }
+                            } catch (e) {}
+                        }
+                    });
+                }, 100);
             });
         }
 
