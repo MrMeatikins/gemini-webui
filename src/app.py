@@ -193,6 +193,18 @@ def handle_disconnect():
         except Exception:
             pass
 
+@app.before_request
+def require_auth():
+    if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true' or app.config.get('BYPASS_AUTH_FOR_TESTING') == 'true':
+        session['authenticated'] = True
+        return
+        
+    if request.path == '/api/health':
+        return
+
+    if not LDAP_SERVER:
+        return authenticate()
+        
     auth = request.authorization
     if auth and check_auth(auth.username, auth.password, LDAP_SERVER, LDAP_BASE_DN, AD_BIND_USER_DN, AD_BIND_PASS, AUTHORIZED_GROUP, FALLBACK_DOMAIN):
         session['authenticated'] = True
