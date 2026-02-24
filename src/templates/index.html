@@ -88,8 +88,11 @@
         .control-btn.danger:active { background: #f14c4c; }
 
         @media (max-width: 768px) {
-            #mobile-controls { display: grid; }
+            #mobile-controls { display: grid !important; }
             #ssh-target, #ssh-dir { width: 100px !important; }
+            #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
+            #active-connection-info { gap: 5px; }
+            body { height: 100vh; height: -webkit-fill-available; }
         }
     </style>
 </head>
@@ -98,15 +101,15 @@
         <button id="new-tab-btn" onclick="addNewTab()">+ New</button>
         <div id="active-connection-info" style="display: none; align-items: center; gap: 10px;">
             <button onclick="restartActiveTab()">Restart</button>
-            <input type="text" id="ssh-target" placeholder="user@host" style="background:#444; color:white; border:1px solid #666; padding:5px; width:200px; margin-left: 20px;">
-            <input type="text" id="ssh-dir" placeholder="/folder" style="background:#444; color:white; border:1px solid #666; padding:5px; width:150px;">
+            <input type="text" id="ssh-target" placeholder="user@host" style="background:#444; color:white; border:1px solid #666; padding:5px; width:150px;">
+            <input type="text" id="ssh-dir" placeholder="/folder" style="background:#444; color:white; border:1px solid #666; padding:5px; width:100px;">
         </div>
         <button onclick="openSettings()" style="background: #2472c8; margin-left: 10px;">Settings</button>
         <div id="connection-status" style="margin-left: auto; color: #0dbc79; font-weight: bold; font-family: monospace; padding: 5px 10px;"></div>
     </div>
     <div id="tab-bar"></div>
     <div id="terminal-container"></div>
-    <div id="mobile-controls">
+    <div id="mobile-controls" style="display: none;">
         <div class="control-btn" onclick="sendToTerminal('\x1b[A')">▲</div>
         <div class="control-btn" onclick="sendToTerminal('\x1b[B')">▼</div>
         <div class="control-btn" onclick="sendToTerminal('\x1b[D')">◀</div>
@@ -378,6 +381,26 @@
             tabs.forEach(tab => { if (tab.state === 'terminal' && tab.fitAddon) { try { tab.fitAddon.fit(); if (tab.socket && tab.socket.connected) tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows}); } catch (e) {} } });
         });
         resizeObserver.observe(document.getElementById('terminal-container'));
+
+        // Handle mobile keyboard resizing using Visual Viewport API
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                const viewHeight = window.visualViewport.height;
+                document.body.style.height = viewHeight + 'px';
+                window.scrollTo(0, 0);
+                
+                tabs.forEach(tab => {
+                    if (tab.state === 'terminal' && tab.fitAddon) {
+                        try {
+                            tab.fitAddon.fit();
+                            if (tab.socket && tab.socket.connected) {
+                                tab.socket.emit('resize', {cols: tab.term.cols, rows: tab.term.rows});
+                            }
+                        } catch (e) {}
+                    }
+                });
+            });
+        }
 
         addNewTab(true);
 
