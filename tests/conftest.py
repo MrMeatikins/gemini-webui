@@ -22,7 +22,6 @@ def server(test_data_dir):
     env["SECRET_KEY"] = "testsecret"
     env["PORT"] = "5005"
     env["DATA_DIR"] = str(test_data_dir)
-    env["DEFAULT_SSH_TARGET"] = ""
     env["SKIP_MONKEY_PATCH"] = "false" # Server SHOULD monkeypatch
     
     mock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock")

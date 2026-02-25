@@ -43,13 +43,8 @@ This is perfect for starting a task on your PC and monitoring its progress from 
 To run Gemini WebUI, you need to configure the following environment variables in your `docker-compose.yml`:
 
 ### Required Variables
-*   `GEMINI_API_KEY`: Your Google Gemini API key.
 *   `LDAP_BIND_USER_DN` & `LDAP_BIND_PASS`: Credentials for LDAP/Active Directory authentication.
 *   `LDAP_AUTHORIZED_GROUP`: The LDAP group permitted to access the UI.
-
-### Optional Defaults
-*   `DEFAULT_SSH_TARGET`: The default `user@host` for SSH sessions (e.g., `adamoutler@192.168.1.101`).
-*   `DEFAULT_SSH_DIR`: The default working directory for SSH sessions (e.g., `~/oc`).
 
 ### Volumes
 The application uses a named volume to persist configuration and AI state:

@@ -7,8 +7,6 @@ pipeline {
         LDAP_SERVER = 'ldaps://192.168.1.100'
         LDAP_BASE_DN = 'CN=Users,DC=activedirectory,DC=adamoutler,DC=com'
         LDAP_AUTHORIZED_GROUP = 'CN=gemini-webui,OU=Groups,dc=activedirectory,dc=adamoutler,dc=com'
-        DEFAULT_SSH_TARGET = 'adamoutler@192.168.1.101'
-        DEFAULT_SSH_DIR = '~/oc'
         ALLOWED_ORIGINS = 'https://gemini.hackedyour.info'
     }
 
@@ -53,8 +51,7 @@ pipeline {
                     env.SECRET_KEY = java.util.UUID.randomUUID().toString()
 
                     withCredentials([
-                        string(credentialsId: 'GOOGLE_API_KEY', variable: 'GEMINI_API_KEY'),
-                        usernamePassword(credentialsId: 'ldap-bind-auth-user', passwordVariable: 'AD_BIND_PASS', usernameVariable: 'AD_BIND_USER_DN')
+                        usernamePassword(credentialsId: 'ldap-bind-auth-user', passwordVariable: 'LDAP_BIND_PASS', usernameVariable: 'LDAP_BIND_USER_DN')
                     ]) {
                         sh "sed -i 's/\\\${USERNAME}/jenkins/g' src/GEMINI.md"
                         sh 'docker pull python:3.11-slim'
@@ -74,7 +71,6 @@ pipeline {
             }
             withCredentials([
                 string(credentialsId: 'Adam-Jenkins-Token', variable: 'ADAM_TOKEN'),
-                string(credentialsId: 'GOOGLE_API_KEY', variable: 'GEMINI_API_KEY'),
                 usernamePassword(credentialsId: 'ldap-bind-auth-user', passwordVariable: 'LDAP_BIND_PASS', usernameVariable: 'LDAP_BIND_USER_DN')
             ]) {
                 sh 'docker compose ps'

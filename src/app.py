@@ -37,8 +37,6 @@ LDAP_BIND_USER_DN = os.environ.get('LDAP_BIND_USER_DN')
 LDAP_BIND_PASS = os.environ.get('LDAP_BIND_PASS')
 LDAP_AUTHORIZED_GROUP = os.environ.get('LDAP_AUTHORIZED_GROUP')
 LDAP_FALLBACK_DOMAIN = os.environ.get('LDAP_FALLBACK_DOMAIN', 'example.com')
-DEFAULT_SSH_TARGET = os.environ.get('DEFAULT_SSH_TARGET')
-DEFAULT_SSH_DIR = os.environ.get('DEFAULT_SSH_DIR', '~')
 
 # SECURITY PARADIGM: Fail-Closed Logging
 logging.basicConfig(level=logging.INFO)
@@ -91,23 +89,12 @@ def get_config():
         "LDAP_BIND_PASS": LDAP_BIND_PASS,
         "LDAP_AUTHORIZED_GROUP": LDAP_AUTHORIZED_GROUP,
         "LDAP_FALLBACK_DOMAIN": LDAP_FALLBACK_DOMAIN,
-        "DEFAULT_SSH_TARGET": DEFAULT_SSH_TARGET,
-        "DEFAULT_SSH_DIR": DEFAULT_SSH_DIR,
         "SECRET_KEY": os.environ.get('SECRET_KEY', 'stable-fallback-key-change-me'),
         "ALLOWED_ORIGINS": os.environ.get('ALLOWED_ORIGINS', '*'),
         "HOSTS": [
             { "label": 'local', "type": 'local' }
         ]
     }
-    
-    # Add default SSH target if configured
-    if DEFAULT_SSH_TARGET:
-        conf['HOSTS'].append({
-            "label": 'Default SSH',
-            "type": 'ssh',
-            "target": DEFAULT_SSH_TARGET,
-            "dir": DEFAULT_SSH_DIR
-        })
     
     if os.path.exists(config_file):
         try:
@@ -122,7 +109,7 @@ def get_config():
     return conf
 
 def init_app():
-    global config, LDAP_SERVER, LDAP_BASE_DN, LDAP_BIND_USER_DN, LDAP_BIND_PASS, LDAP_AUTHORIZED_GROUP, LDAP_FALLBACK_DOMAIN, DEFAULT_SSH_TARGET, DEFAULT_SSH_DIR
+    global config, LDAP_SERVER, LDAP_BASE_DN, LDAP_BIND_USER_DN, LDAP_BIND_PASS, LDAP_AUTHORIZED_GROUP, LDAP_FALLBACK_DOMAIN
     data_dir, config_file, ssh_dir = get_config_paths()
     logger.info(f"Initializing app with DATA_DIR: {data_dir}")
     os.makedirs(ssh_dir, mode=0o700, exist_ok=True)
@@ -166,8 +153,6 @@ def init_app():
     LDAP_BIND_PASS = config.get('LDAP_BIND_PASS')
     LDAP_AUTHORIZED_GROUP = config.get('LDAP_AUTHORIZED_GROUP')
     LDAP_FALLBACK_DOMAIN = config.get('LDAP_FALLBACK_DOMAIN')
-    DEFAULT_SSH_TARGET = config.get('DEFAULT_SSH_TARGET')
-    DEFAULT_SSH_DIR = config.get('DEFAULT_SSH_DIR')
 
     app.config.update(
         SECRET_KEY=config.get('SECRET_KEY'),
@@ -426,7 +411,7 @@ def pty_restart(data):
 
 @app.route('/')
 def index():
-    return render_template('index.html', default_target=DEFAULT_SSH_TARGET, default_dir=DEFAULT_SSH_DIR)
+    return render_template('index.html')
 
 @app.route('/api/hosts', methods=['GET'])
 @authenticated_only
