@@ -16,6 +16,7 @@ import logging
 import codecs
 import json
 import shutil
+import shlex
 from functools import wraps
 from flask import Flask, render_template, request, Response, session, jsonify
 from werkzeug.utils import secure_filename
@@ -29,6 +30,7 @@ except ImportError:
 
 # Global config holder and defaults
 config = {}
+GEMINI_BIN = os.environ.get('GEMINI_BIN', '/usr/local/bin/gemini')
 ADMIN_USER = os.environ.get('ADMIN_USER')
 ADMIN_PASS = os.environ.get('ADMIN_PASS')
 LDAP_SERVER = os.environ.get('LDAP_SERVER')
@@ -126,7 +128,6 @@ def init_app():
             logger.error(f"Failed to update symlink: {e}")
     elif os.path.exists(home_gemini):
         if os.path.isdir(home_gemini):
-            import shutil
             try:
                 # If it's a directory, we might want to move its contents? 
                 # But the user said "make it a symlink", so we'll just remove and link.
@@ -151,8 +152,13 @@ def init_app():
     LDAP_AUTHORIZED_GROUP = config.get('LDAP_AUTHORIZED_GROUP')
     LDAP_FALLBACK_DOMAIN = config.get('LDAP_FALLBACK_DOMAIN')
 
+    # Load secret key from config (env) or generate one
+    import secrets
+    fallback_key = secrets.token_hex(32)
+    secret_key = config.get('SECRET_KEY') or os.environ.get('SECRET_KEY') or fallback_key
+
     app.config.update(
-        SECRET_KEY='gemini-webui-stable-secret-key',
+        SECRET_KEY=secret_key,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SECURE=False, 
         SESSION_COOKIE_SAMESITE='Lax',
@@ -188,11 +194,16 @@ csp = {
 
 Talisman(app, 
          content_security_policy=csp, 
-         force_https=False, 
-         strict_transport_security=False,
-         session_cookie_secure=False)
+         force_https=False, # Proxy handles HTTPS
+         strict_transport_security=True,
+         session_cookie_secure=False) # Set to True if proxy handles SSL
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+# Only allow origins from environment or localhost
+if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true':
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+else:
+    allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000').split(',')
+    socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode='eventlet')
 
 def authenticate():
     return Response(
@@ -281,24 +292,38 @@ def read_and_forward_pty_output():
                     sid_to_tabid.pop(sid, None)
                     tabid_to_sid.pop(tab_id, None)
 
+def validate_ssh_target(target):
+    """Ensure SSH target is in a safe format (user@host or host)."""
+    if not target:
+        return False
+    # Only allow alphanumeric, dots, hyphens, and one @
+    return bool(re.match(r'^[a-zA-Z0-9.-]+(@[a-zA-Z0-9.-]+)?$', target))
+
 def fetch_sessions_for_host(host):
     """Internal helper to fetch sessions for a host config."""
     ssh_target = host.get('target')
     ssh_dir = host.get('dir')
     cmd = []
     if ssh_target:
+        if not validate_ssh_target(ssh_target):
+            return {"error": "Invalid SSH target format", "timestamp": time.time()}
+            
         remote_cmd = "gemini --list-sessions"
         if ssh_dir:
-            remote_cmd = f"cd {ssh_dir} && {remote_cmd}"
+            # Use shlex.quote for safe shell escaping
+            quoted_dir = shlex.quote(ssh_dir)
+            remote_cmd = f"cd {quoted_dir} && {remote_cmd}"
+            
         cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', '-o', 'StrictHostKeyChecking=no']
         data_dir, _, ssh_dir_path = get_config_paths()
         if os.path.exists(ssh_dir_path):
             for f in os.listdir(ssh_dir_path):
                 if os.path.isfile(os.path.join(ssh_dir_path, f)) and f not in ['config', 'known_hosts'] and not f.endswith('.pub'):
                     cmd.extend(['-i', os.path.join(ssh_dir_path, f)])
-        cmd.extend([ssh_target, remote_cmd])
+        # Use -- to separate options from positional arguments
+        cmd.extend(['--', ssh_target, remote_cmd])
     else:
-        cmd = ['gemini', '--list-sessions']
+        cmd = [GEMINI_BIN, '--list-sessions']
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
@@ -390,20 +415,28 @@ def pty_restart(data):
         os.environ['TERM'] = 'xterm-256color'
         os.environ['COLORTERM'] = 'truecolor'
         if ssh_target:
+            if not validate_ssh_target(ssh_target):
+                print("\r\nInvalid SSH target format\r\n")
+                os._exit(1)
+                
             remote_cmd = "gemini"
             if resume is True: remote_cmd += " -r"
             elif resume and str(resume).isdigit(): remote_cmd += f" -r {resume}"
-            if ssh_dir: remote_cmd = f"cd {ssh_dir} && {remote_cmd}"
+            
+            if ssh_dir:
+                quoted_dir = shlex.quote(ssh_dir)
+                remote_cmd = f"cd {quoted_dir} && {remote_cmd}"
+                
             cmd = ['ssh', '-t']
             _, _, ssh_dir_path = get_config_paths()
             if os.path.exists(ssh_dir_path):
                 for f in os.listdir(ssh_dir_path):
                     if os.path.isfile(os.path.join(ssh_dir_path, f)) and f not in ['config', 'known_hosts'] and not f.endswith('.pub'):
                         cmd.extend(['-i', os.path.join(ssh_dir_path, f)])
-            cmd.extend(['-o', 'PreferredAuthentications=publickey,password', '-o', 'StrictHostKeyChecking=no', ssh_target, remote_cmd])
+            cmd.extend(['-o', 'PreferredAuthentications=publickey,password', '-o', 'StrictHostKeyChecking=no', '--', ssh_target, remote_cmd])
         else:
             # Use shell to ensure gemini is found in PATH and handled correctly
-            gemini_cmd = "/usr/local/bin/gemini"
+            gemini_cmd = GEMINI_BIN
             if resume is True: gemini_cmd += " -r"
             elif resume and str(resume).isdigit(): gemini_cmd += f" -r {resume}"
             cmd = ['/bin/sh', '-c', gemini_cmd]
@@ -553,4 +586,7 @@ if __name__ == '__main__':
     socketio.start_background_task(cleanup_orphaned_ptys)
     if os.environ.get('SKIP_PRELOADER') != 'true':
         socketio.start_background_task(background_session_preloader)
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+    
+    debug_mode = os.environ.get('FLASK_DEBUG', 'true').lower() == 'true'
+    use_reloader = os.environ.get('FLASK_USE_RELOADER', 'true').lower() == 'true'
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=debug_mode, use_reloader=use_reloader)

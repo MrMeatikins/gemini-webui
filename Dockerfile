@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
-ENV ADMIN_USER=admin
-ENV ADMIN_PASS=admin
+ENV ADMIN_USER=
+ENV ADMIN_PASS=
 
 # LDAP Configuration
 ENV LDAP_SERVER=

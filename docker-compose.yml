@@ -5,8 +5,8 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - ADMIN_USER=admin
-      - ADMIN_PASS=admin
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASS=${ADMIN_PASS:-admin}
       - LDAP_SERVER=${LDAP_SERVER}
       - LDAP_BASE_DN=${LDAP_BASE_DN}
       - LDAP_BIND_USER_DN=${LDAP_BIND_USER_DN}
