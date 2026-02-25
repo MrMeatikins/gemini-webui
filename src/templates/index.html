@@ -180,7 +180,7 @@
         <div class="control-btn" onclick="sendToTerminal('\x1b[B')">▼</div>
     </div>
 
-    <div id="settings-modal" style="display:none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7);">
+    <div id="settings-modal" onclick="if(event.target === this) closeSettings()" style="display:none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7);">
         <div style="background-color: #333; color: white; margin: 5% auto; padding: 25px; border: 1px solid #444; width: 60%; max-height: 85vh; overflow-y: auto; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
             <span onclick="closeSettings()" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer; opacity: 0.7;">&times;</span>
             <h2 style="margin-top: 0;">Settings</h2>
@@ -233,7 +233,7 @@
         </div>
     </div>
 
-    <div id="quick-add-key-modal" class="modal">
+    <div id="quick-add-key-modal" onclick="if(event.target === this) closeQuickAddKey()" class="modal">
         <div class="modal-content">
             <span onclick="closeQuickAddKey()" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer; opacity: 0.7;">&times;</span>
             <h2 style="margin-top: 0;">Add SSH Key & Connect</h2>
