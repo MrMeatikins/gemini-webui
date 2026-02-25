@@ -125,16 +125,17 @@
                 <h3 style="font-size: 14px; text-transform: uppercase;">Manage Hosts</h3>
                 <div id="hosts-list" style="margin-bottom: 15px; border: 1px solid #444; border-radius: 4px; overflow: hidden;"></div>
                 <div style="background: #2a2d2e; padding: 15px; border-radius: 4px;">
-                    <h4 style="margin: 0 0 10px 0; font-size: 13px;">
-                        <span id="add-host-mode" style="cursor:pointer; color:#3b8eea; font-weight:bold;" onclick="clearHostForm()">[add]</span> 
-                        <span id="edit-host-mode" style="color:#888;">[edit]</span> Hosts
-                    </h4>
+                    <div style="display: flex; gap: 5px; margin-bottom: 10px; align-items: center;">
+                        <button id="add-mode-btn" class="small success" onclick="setHostMode('add')" style="opacity: 1; font-weight: bold;">[ADD]</button>
+                        <button id="edit-mode-btn" class="small primary" onclick="setHostMode('edit')" style="opacity: 0.5; font-weight: normal;">[EDIT]</button>
+                        <span style="font-size: 13px; margin-left: 5px; color: #ccc;">Host Configuration</span>
+                    </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <input type="text" id="new-host-label" placeholder="Label">
-                        <input type="text" id="new-host-target" placeholder="user@host">
+                        <input type="text" id="new-host-target" placeholder="user@host (blank for local)">
                     </div>
                     <input type="text" id="new-host-dir" placeholder="Default Directory">
-                    <button id="add-host-btn" class="success" style="margin-top: 5px; width: 100%;" onclick="addHost()">Add Host</button>
+                    <button id="add-host-btn" class="success" style="margin-top: 5px; width: 100%;" onclick="submitHostForm()">Add Host</button>
                 </div>
             </div>
             <hr style="border: 0; border-top: 1px solid #444; margin: 20px 0;">
@@ -490,34 +491,59 @@
             hosts.forEach(host => {
                 const item = document.createElement('div'); item.className = 'session-item';
                 item.style.cursor = 'pointer';
-                item.onclick = () => editHost(host);
+                item.onclick = () => populateHostForm(host);
                 item.innerHTML = `<div class="session-info"><span style="color:#fff; font-weight:bold;">${host.label}</span><span style="opacity:0.6; margin-left:10px;">${host.target || 'local'} ${host.dir || ''}</span></div>` + (host.label !== "local" ? `<button class="danger small" onclick="event.stopPropagation(); removeHost('${host.label}')">Delete</button>` : '');
                 list.appendChild(item);
             });
         }
-        function editHost(host) {
+        function populateHostForm(host) {
             document.getElementById('new-host-label').value = host.label;
             document.getElementById('new-host-target').value = host.target || '';
             document.getElementById('new-host-dir').value = host.dir || '';
-            document.getElementById('add-host-btn').innerText = 'Update Host';
-            document.getElementById('add-host-mode').style.color = '#888';
-            document.getElementById('add-host-mode').style.fontWeight = 'normal';
-            document.getElementById('edit-host-mode').style.color = '#3b8eea';
-            document.getElementById('edit-host-mode').style.fontWeight = 'bold';
+            if (host.label === 'local') {
+                setHostMode('add'); // Cannot edit default local, force add mode
+            } else {
+                setHostMode('edit');
+            }
+        }
+        function setHostMode(mode) {
+            const addBtn = document.getElementById('add-mode-btn');
+            const editBtn = document.getElementById('edit-mode-btn');
+            const submitBtn = document.getElementById('add-host-btn');
+            const labelInput = document.getElementById('new-host-label');
+            
+            if (mode === 'edit') {
+                if (labelInput.value === 'local') {
+                    alert("The default 'local' host cannot be edited. It will be used as a template for a new host.");
+                    setHostMode('add');
+                    return;
+                }
+                addBtn.style.opacity = '0.5'; addBtn.style.fontWeight = 'normal';
+                editBtn.style.opacity = '1'; editBtn.style.fontWeight = 'bold';
+                submitBtn.innerText = 'Update Host';
+                submitBtn.className = 'primary';
+            } else {
+                addBtn.style.opacity = '1'; addBtn.style.fontWeight = 'bold';
+                editBtn.style.opacity = '0.5'; editBtn.style.fontWeight = 'normal';
+                submitBtn.innerText = 'Add Host';
+                submitBtn.className = 'success';
+            }
         }
         function clearHostForm() {
             document.getElementById('new-host-label').value = '';
             document.getElementById('new-host-target').value = '';
             document.getElementById('new-host-dir').value = '';
-            document.getElementById('add-host-btn').innerText = 'Add Host';
-            document.getElementById('add-host-mode').style.color = '#3b8eea';
-            document.getElementById('add-host-mode').style.fontWeight = 'bold';
-            document.getElementById('edit-host-mode').style.color = '#888';
-            document.getElementById('edit-host-mode').style.fontWeight = 'normal';
+            setHostMode('add');
         }
-        async function addHost() {
-            const label = document.getElementById('new-host-label').value; const target = document.getElementById('new-host-target').value; const dir = document.getElementById('new-host-dir').value;
-            if (!label) return alert("Label required"); const host = { label, type: target ? 'ssh' : 'local', target, dir };
+        async function submitHostForm() {
+            const label = document.getElementById('new-host-label').value; 
+            const target = document.getElementById('new-host-target').value; 
+            const dir = document.getElementById('new-host-dir').value;
+            if (!label) return alert("Label required");
+            if (label === 'local' && document.getElementById('add-host-btn').innerText === 'Update Host') {
+                return alert("Cannot update protected 'local' host.");
+            }
+            const host = { label, type: target ? 'ssh' : 'local', target, dir };
             await fetch('/api/hosts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(host) });
             clearHostForm(); loadHosts();
         }
