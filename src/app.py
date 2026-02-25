@@ -462,11 +462,21 @@ def pty_restart(data):
                         cmd.extend(['-i', os.path.join(ssh_dir_path, f)])
             cmd.extend(['-o', 'PreferredAuthentications=publickey,password', '-o', 'StrictHostKeyChecking=no', '--', ssh_target, remote_cmd])
         else:
+            # Workspace initialization with failover guidance
+            work_dir = "/data/workspace"
+            setup_cmd = f"mkdir -p {work_dir} 2>/dev/null || {{ "
+            setup_cmd += "printf '\\r\\n\\033[1;33mWARNING: Persistence volume not found at /data.\\033[0m\\r\\n'; "
+            setup_cmd += "printf 'To enable persistence and prevent data loss, mount a volume:\\r\\n\\r\\n'; "
+            setup_cmd += "printf '\\033[1;34mDocker Compose:\\033[0m\\r\\n  volumes:\\r\\n    - data:/data\\r\\n\\r\\n'; "
+            setup_cmd += "printf '\\033[1;34mDocker CLI:\\033[0m\\r\\n  docker run -v gemini_data:/data ...\\r\\n\\r\\n'; "
+            setup_cmd += "sleep 10; }; "
+            setup_cmd += f"cd {work_dir} 2>/dev/null || cd /tmp; "
+            
             # Use shell to ensure gemini is found in PATH and handled correctly
             gemini_cmd = GEMINI_BIN
             if resume is True: gemini_cmd += " -r"
             elif resume and str(resume).isdigit(): gemini_cmd += f" -r {resume}"
-            cmd = ['/bin/sh', '-c', gemini_cmd]
+            cmd = ['/bin/sh', '-c', f"{setup_cmd} exec {gemini_cmd}"]
         os.execvp(cmd[0], cmd)
         os._exit(0)
     else:
