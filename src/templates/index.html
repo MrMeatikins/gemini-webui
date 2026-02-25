@@ -53,9 +53,11 @@
             align-items: center;
             gap: 10px;
             border: 1px solid #444;
+            flex-wrap: nowrap;
         }
-        .quick-connect-label { color: #3b8eea; font-weight: bold; font-size: 14px; }
-        .quick-connect-input { flex-grow: 1; margin: 0 !important; }
+        .quick-connect-label { color: #3b8eea; font-weight: bold; font-size: 14px; white-space: nowrap; }
+        .quick-connect-input { flex-grow: 1; margin: 0 !important; min-width: 100px; }
+        .quick-connect-bar button { white-space: nowrap; flex-shrink: 0; }
         
         /* Modal Styles */
         .modal {
