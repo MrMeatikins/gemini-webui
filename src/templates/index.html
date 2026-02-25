@@ -88,7 +88,7 @@
         .launcher h2 { color: white; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; font-weight: 500;}
         .connection-card { background: #252526; border-radius: 6px; padding: 15px; margin-bottom: 15px; border: 1px solid #333; transition: opacity 0.2s, transform 0.2s; }
         .connection-card:hover { border-color: #444; }
-        .connection-card.dragging { opacity: 0.1; transform: scale(0.98); }
+        .connection-card.dragging { opacity: 0.3; transform: scale(0.98); }
         
         .drag-placeholder {
             background: rgba(59, 142, 234, 0.05);
@@ -368,6 +368,11 @@
                     draggedCard = card;
                     e.dataTransfer.effectAllowed = 'move';
                     e.dataTransfer.setData('text/plain', conn.label);
+                    
+                    // Set the drag image to the whole card instead of just the handle
+                    const rect = card.getBoundingClientRect();
+                    e.dataTransfer.setDragImage(card, e.clientX - rect.left, e.clientY - rect.top);
+
                     // Use setTimeout to ensure the "dragging" class is added after the drag image is generated
                     setTimeout(() => {
                         card.classList.add('dragging');
