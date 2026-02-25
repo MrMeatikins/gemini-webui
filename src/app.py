@@ -116,33 +116,7 @@ def init_app():
     gemini_data = os.path.join(data_dir, ".gemini")
     os.makedirs(gemini_data, mode=0o700, exist_ok=True)
     
-    # Target /home/node/.gemini as requested
-    home_gemini = "/home/node/.gemini"
-    if os.path.islink(home_gemini):
-        try:
-            if os.readlink(home_gemini) != gemini_data:
-                os.unlink(home_gemini)
-                os.symlink(gemini_data, home_gemini)
-                logger.info(f"Updated symlink {home_gemini} to {gemini_data}")
-        except Exception as e:
-            logger.error(f"Failed to update symlink: {e}")
-    elif os.path.exists(home_gemini):
-        if os.path.isdir(home_gemini):
-            try:
-                # If it's a directory, we might want to move its contents? 
-                # But the user said "make it a symlink", so we'll just remove and link.
-                shutil.rmtree(home_gemini)
-                os.symlink(gemini_data, home_gemini)
-                logger.info(f"Replaced directory {home_gemini} with symlink to {gemini_data}")
-            except Exception as e:
-                logger.error(f"Failed to replace directory with symlink: {e}")
-    else:
-        try:
-            os.makedirs(os.path.dirname(home_gemini), exist_ok=True)
-            os.symlink(gemini_data, home_gemini)
-            logger.info(f"Created symlink {home_gemini} to {gemini_data}")
-        except Exception as e:
-            logger.error(f"Failed to create symlink: {e}")
+    # Symlink /home/node/.gemini -> /data/.gemini is handled in Dockerfile for RO root compatibility.
     
     config = get_config()
     LDAP_SERVER = config.get('LDAP_SERVER')

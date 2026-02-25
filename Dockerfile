@@ -27,14 +27,17 @@ RUN apt-get update && apt-get install -y \
 COPY . .
 
 # Set environment variables for Gemini
+ENV PYTHONDONTWRITEBYTECODE=1
 ENV GEMINI_HOME=/home/node/.gemini
 # Expose the Flask port
 EXPOSE 5000
 
 # Create a non-root user and data directory
 RUN useradd -m -u 1000 node && \
-    mkdir -p /data && \
-    chown -R node:node /data
+    mkdir -p /data/.gemini && \
+    chown -R node:node /data && \
+    ln -s /data/.gemini /home/node/.gemini && \
+    chown -h node:node /home/node/.gemini
 
 # Install Gemini CLI via npm at the end to ensure it's not shadowed
 RUN npm install -g @google/gemini-cli --unsafe-perm && \
