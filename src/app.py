@@ -302,6 +302,13 @@ def fetch_sessions_for_host(host):
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        # Suppress auth errors from the CLI - just show as "no sessions"
+        if result.returncode != 0 and ("Please set an Auth method" in result.stderr or "GEMINI_API_KEY" in result.stderr):
+            return {
+                "output": "",
+                "error": None,
+                "timestamp": time.time()
+            }
         return {
             "output": result.stdout,
             "error": result.stderr if result.returncode != 0 else None,
