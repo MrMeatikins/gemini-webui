@@ -5,13 +5,13 @@ from playwright.sync_api import sync_playwright, expect
 # =====================================================================================
 # MANDATORY TIMEOUT GUARDRAILS
 # =====================================================================================
-# Individual test execution MUST NOT exceed 20 seconds.
+# Individual test execution MUST NOT exceed 10 seconds.
 # =====================================================================================
 
-MAX_TEST_TIME = 20.0
+MAX_TEST_TIME = 10.0
 
 @pytest.mark.prone_to_timeout
-@pytest.mark.timeout(20)
+@pytest.mark.timeout(10)
 def test_gemini_ui_final(server):
     start_time = time.time()
     

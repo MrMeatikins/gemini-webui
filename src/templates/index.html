@@ -348,14 +348,13 @@
                                 const endX = Math.min(lineTexts[lineIdx].length, matchEnd - lineStartOffset);
                                 
                                 links.push({
-                                    text: uri,
+                                    text: uri, // Report the FULL uri even for this segment
                                     range: {
                                         start: { x: startX + 1, y: y },
                                         end: { x: endX + 1, y: y }
                                     },
                                     activate: (e, text) => {
-                                        console.log("Activating link:", text);
-                                        window.open(text, '_blank', 'noopener,noreferrer');
+                                        window.open(uri, '_blank', 'noopener,noreferrer');
                                     }
                                 });
                             }
