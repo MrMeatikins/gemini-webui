@@ -123,7 +123,7 @@ def get_config():
     return conf
 
 def init_app():
-    global config, LDAP_SERVER, LDAP_BASE_DN, LDAP_BIND_USER_DN, LDAP_BIND_PASS, LDAP_AUTHORIZED_GROUP, LDAP_FALLBACK_DOMAIN
+    global config, ADMIN_USER, ADMIN_PASS, LDAP_SERVER, LDAP_BASE_DN, LDAP_BIND_USER_DN, LDAP_BIND_PASS, LDAP_AUTHORIZED_GROUP, LDAP_FALLBACK_DOMAIN
     data_dir, config_file, ssh_dir = get_config_paths()
     logger.info(f"Initializing app with DATA_DIR: {data_dir}")
     
@@ -172,6 +172,8 @@ def init_app():
     except Exception: pass
     
     config = get_config()
+    ADMIN_USER = config.get('ADMIN_USER', ADMIN_USER)
+    ADMIN_PASS = config.get('ADMIN_PASS', ADMIN_PASS)
     LDAP_SERVER = config.get('LDAP_SERVER')
     LDAP_BASE_DN = config.get('LDAP_BASE_DN')
     LDAP_BIND_USER_DN = config.get('LDAP_BIND_USER_DN')
@@ -229,7 +231,13 @@ Talisman(app,
 if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true':
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 else:
-    allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000').split(',')
+    # Default to '*' for ease of use if not specified, but log it
+    allowed_origins_raw = os.environ.get('ALLOWED_ORIGINS')
+    if allowed_origins_raw:
+        allowed_origins = allowed_origins_raw.split(',')
+    else:
+        logger.warning("ALLOWED_ORIGINS not set. Defaulting to '*' (CORS restricted disabled).")
+        allowed_origins = "*"
     socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode='eventlet')
 
 def authenticate():
@@ -277,9 +285,16 @@ def require_auth():
     auth = request.authorization
     
     # Allow ADMIN_USER/ADMIN_PASS bypass
-    if auth and auth.username == ADMIN_USER and auth.password == ADMIN_PASS:
-        session['authenticated'] = True
-        return
+    if auth:
+        logger.info(f"Auth attempt: user='{auth.username}' (Expected: '{ADMIN_USER}')")
+        if auth.username == ADMIN_USER and auth.password == ADMIN_PASS:
+            logger.info("Admin bypass successful")
+            session['authenticated'] = True
+            return
+        else:
+            logger.info("Admin bypass failed: credentials mismatch")
+    else:
+        logger.info(f"No authorization header present. (Admin user is '{ADMIN_USER}')")
 
     # Fallback authentication if LDAP is not configured
     if not LDAP_SERVER:
