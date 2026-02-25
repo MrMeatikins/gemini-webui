@@ -37,7 +37,9 @@ RUN useradd -m -u 1000 node && \
     mkdir -p /data/.gemini && \
     chown -R node:node /data && \
     ln -s /data/.gemini /home/node/.gemini && \
-    chown -h node:node /home/node/.gemini
+    chown -h node:node /home/node/.gemini && \
+    mkdir -p /root && \
+    ln -s /data/.gemini /root/.gemini
 
 # Install Gemini CLI via npm at the end to ensure it's not shadowed
 RUN npm install -g @google/gemini-cli --unsafe-perm && \
