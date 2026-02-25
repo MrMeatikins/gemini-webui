@@ -284,25 +284,16 @@ def require_auth():
 
     auth = request.authorization
     
-    # Allow ADMIN_USER/ADMIN_PASS bypass
-    if auth:
-        logger.info(f"Auth attempt: user='{auth.username}' (Expected: '{ADMIN_USER}')")
-        if auth.username == ADMIN_USER and auth.password == ADMIN_PASS:
-            logger.info("Admin bypass successful")
-            session['authenticated'] = True
-            return
-        else:
-            logger.info("Admin bypass failed: credentials mismatch")
-    else:
-        logger.info(f"No authorization header present. (Admin user is '{ADMIN_USER}')")
-
-    # Fallback authentication if LDAP is not configured
-    if not LDAP_SERVER:
-        return authenticate()
-        
-    if auth and check_auth(auth.username, auth.password, LDAP_SERVER, LDAP_BASE_DN, LDAP_BIND_USER_DN, LDAP_BIND_PASS, LDAP_AUTHORIZED_GROUP, LDAP_FALLBACK_DOMAIN):
+    # Check against local admin credentials
+    if auth and auth.username == ADMIN_USER and auth.password == ADMIN_PASS:
         session['authenticated'] = True
         return
+
+    # Check against LDAP if configured
+    if LDAP_SERVER and auth:
+        if check_auth(auth.username, auth.password, LDAP_SERVER, LDAP_BASE_DN, LDAP_BIND_USER_DN, LDAP_BIND_PASS, LDAP_AUTHORIZED_GROUP, LDAP_FALLBACK_DOMAIN):
+            session['authenticated'] = True
+            return
 
     if not session.get('authenticated'):
         return authenticate()
