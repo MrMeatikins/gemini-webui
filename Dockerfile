@@ -24,11 +24,6 @@ RUN apt-get update && apt-get install -y \
     xclip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Gemini CLI via npm to ensure architecture compatibility (arm64/amd64)
-RUN npm install -g npm@latest && \
-    npm install -g @google/gemini-cli --unsafe-perm && \
-    npm cache clean --force
-
 COPY . .
 
 # Set environment variables for Gemini
@@ -40,6 +35,10 @@ EXPOSE 5000
 RUN useradd -m -u 1000 node && \
     mkdir -p /data && \
     chown -R node:node /data
+
+# Install Gemini CLI via npm at the end to ensure it's not shadowed
+RUN npm install -g @google/gemini-cli --unsafe-perm && \
+    ls -l /usr/local/bin/gemini
 
 # We need access to the mounted volume for the host
 CMD ["python", "src/app.py"]
