@@ -130,6 +130,18 @@ def init_app():
         except Exception as e:
             logger.error(f"Failed to fix permissions for {path}: {e}")
     
+    # Generate instance SSH key if not exists
+    key_path = os.path.join(ssh_dir, 'id_ed25519')
+    if not os.path.exists(key_path):
+        try:
+            logger.info("Generating new instance SSH key...")
+            subprocess.run(['ssh-keygen', '-t', 'ed25519', '-N', '', '-f', key_path, '-C', 'gemini-webui-instance'], check=True)
+            shutil.chown(key_path, user='node', group='node')
+            shutil.chown(key_path + '.pub', user='node', group='node')
+            os.chmod(key_path, 0o600)
+        except Exception as e:
+            logger.error(f"Failed to generate SSH key: {e}")
+    
     # Symlink /home/node/.gemini -> /data/.gemini is handled in Dockerfile for RO root compatibility.
     
     config = get_config()
@@ -535,7 +547,8 @@ def list_ssh_keys():
 @app.route('/api/keys/public', methods=['GET'])
 @authenticated_only
 def get_public_key():
-    pub_key_path = os.path.expanduser("~/.ssh/id_ed25519.pub")
+    _, _, ssh_dir = get_config_paths()
+    pub_key_path = os.path.join(ssh_dir, "id_ed25519.pub")
     if os.path.exists(pub_key_path):
         with open(pub_key_path, 'r') as f:
             return jsonify({"key": f.read().strip()})

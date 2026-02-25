@@ -186,6 +186,10 @@
                     <h4 style="margin: 0 0 5px 0; font-size: 11px; color: #888;">DEFAULT PUBLIC KEY (id_ed25519.pub)</h4>
                     <code id="public-key-text" style="font-size: 10px; word-break: break-all; color: #0dbc79;"></code>
                     <button class="small" style="margin-top: 5px; width: 100%;" onclick="copyPublicKey()">Copy Public Key</button>
+                    
+                    <h4 style="margin: 15px 0 5px 0; font-size: 11px; color: #888;">INSTANCE KEY SNIPPET (Add to remote host)</h4>
+                    <code id="instance-key-snippet" style="font-size: 10px; word-break: break-all; color: #3b8eea; display: block; padding: 5px; background: #000; border-radius: 3px;"></code>
+                    <button class="small primary" style="margin-top: 5px; width: 100%;" onclick="copyInstanceSnippet()">Copy Snippet</button>
                 </div>
                 <ul id="key-list" style="list-style: none; padding: 0; border: 1px solid #444; border-radius: 4px; margin-bottom: 15px;"></ul>
                 <div style="background: #2a2d2e; padding: 15px; border-radius: 4px;">
@@ -708,6 +712,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     document.getElementById('public-key-text').innerText = data.key;
+                    document.getElementById('instance-key-snippet').innerText = `mkdir -p ~/.ssh && echo "${data.key}" >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys`;
                     document.getElementById('public-key-container').style.display = 'block';
                 }
             } catch (e) { console.error("Could not load public key", e); }
@@ -715,6 +720,10 @@
         function copyPublicKey() {
             const text = document.getElementById('public-key-text').innerText;
             navigator.clipboard.writeText(text).then(() => alert("Public key copied to clipboard"));
+        }
+        function copyInstanceSnippet() {
+            const text = document.getElementById('instance-key-snippet').innerText;
+            navigator.clipboard.writeText(text).then(() => alert("Snippet copied to clipboard"));
         }
         async function loadHosts() {
             const hosts = await (await fetch('/api/hosts')).json(); const list = document.getElementById('hosts-list'); list.innerHTML = '';
