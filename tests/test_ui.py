@@ -32,7 +32,8 @@ def test_gemini_ui_final(server):
             # 1. Start and verify launcher or auto-resume
             log_progress("Navigating to server")
             page.goto(server, timeout=10000)
-            page.wait_for_load_state("networkidle")
+            # Wait for a key UI element instead of networkidle
+            page.wait_for_selector("#tab-bar", timeout=5000)
             
             # Open new tab to ensure we see the launcher
             log_progress("Opening new tab for launcher verification")
