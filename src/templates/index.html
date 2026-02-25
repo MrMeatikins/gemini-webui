@@ -247,11 +247,10 @@
 
         window.addEventListener('popstate', (event) => {
             const activeTab = tabs.find(t => t.id === activeTabId);
+            // Only hijack if we are currently in a terminal. 
+            // If we are already in launcher mode, let the back button work normally.
             if (activeTab && activeTab.state === 'terminal') {
-                // Intercepted! Open launcher (+ New)
                 addNewTab();
-                // Push state back so the next back button also works
-                window.history.pushState({ terminal: true, tabId: activeTabId }, "");
             }
         });
 
