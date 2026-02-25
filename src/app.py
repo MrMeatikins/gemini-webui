@@ -343,15 +343,16 @@ def fetch_sessions_for_host(host):
             return {"error": "Invalid SSH target format", "timestamp": time.time()}
             
         gemini_list_cmd = "gemini --list-sessions"
+        remote_env = "export TERM=xterm-256color; export COLORTERM=truecolor; export FORCE_COLOR=3; "
         if ssh_dir and ssh_dir != "~":
             # Handle tilde expansion for remote shell
             if ssh_dir.startswith('~'):
                 suffix = ssh_dir[1:]
-                remote_cmd = f"cd ~{shlex.quote(suffix)} && {gemini_list_cmd}"
+                remote_cmd = f"{remote_env} cd ~{shlex.quote(suffix)} && {gemini_list_cmd}"
             else:
-                remote_cmd = f"cd {shlex.quote(ssh_dir)} && {gemini_list_cmd}"
+                remote_cmd = f"{remote_env} cd {shlex.quote(ssh_dir)} && {gemini_list_cmd}"
         else:
-            remote_cmd = gemini_list_cmd
+            remote_cmd = f"{remote_env} {gemini_list_cmd}"
             
         login_wrapped_cmd = f"bash -l -c {shlex.quote(remote_cmd)}"
             
@@ -473,8 +474,11 @@ def pty_restart(data):
             if resume is True: gemini_base_cmd += " -r"
             elif resume and str(resume).isdigit(): gemini_base_cmd += f" -r {resume}"
             
+            # Export color env vars remotely
+            remote_env = "export TERM=xterm-256color; export COLORTERM=truecolor; export FORCE_COLOR=3; "
+            
             # Smart command construction: check for gemini, drop to shell if missing
-            remote_cmd = f"if command -v gemini >/dev/null 2>&1; then "
+            remote_cmd = f"{remote_env} if command -v gemini >/dev/null 2>&1; then "
             if ssh_dir and ssh_dir != "~":
                 if ssh_dir.startswith('~'):
                     suffix = ssh_dir[1:]
