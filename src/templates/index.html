@@ -307,15 +307,9 @@
                     provideLinks(y, callback) {
                         const line = tab.term.buffer.active.getLine(y - 1);
                         if (!line) return callback(undefined);
-                        
-                        // Handle wrapped lines: if this line is wrapped, or the next line is wrapped, 
-                        // we should ideally join them. But xterm LinkProvider calls us for each visual line.
-                        // For now, let's at least fix the regex bug.
                         const text = line.translateToString(true);
-                        const links = [];
-                        // Regex MUST be local to the function or reset lastIndex
                         const urlRegex = /https?:\/\/[^\s"'<>^`]+[^\s"'<>^`.,!?;:]/g;
-                        
+                        const links = [];
                         let match;
                         while ((match = urlRegex.exec(text)) !== null) {
                             const uri = match[0];
@@ -323,10 +317,9 @@
                                 text: uri,
                                 range: {
                                     start: { x: match.index + 1, y: y },
-                                    end: { x: match.index + uri.length, y: y }
+                                    end: { x: match.index + uri.length + 1, y: y }
                                 },
                                 activate: (e, text) => {
-                                    console.log("Activating link:", text);
                                     window.open(text, '_blank', 'noopener,noreferrer');
                                 }
                             });
