@@ -18,9 +18,4 @@ services:
       - LDAP_AUTHORIZED_GROUP=${LDAP_AUTHORIZED_GROUP}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - PYTHONDONTWRITEBYTECODE=1
-    volumes:
-      - data:/data
     restart: unless-stopped
-
-volumes:
-  data:
