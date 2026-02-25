@@ -610,7 +610,11 @@
             // 1. Split for folder
             const parts = val.split('/');
             if (parts.length > 1) {
-                folder = '/' + parts.slice(1).join('/');
+                folder = parts.slice(1).join('/');
+                // If it starts with ~, keep it as is, otherwise ensure it starts with /
+                if (!folder.startsWith('~')) {
+                    folder = '/' + folder;
+                }
                 val = parts[0];
             }
 

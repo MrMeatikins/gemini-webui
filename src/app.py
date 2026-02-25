@@ -290,6 +290,10 @@ def fetch_sessions_for_host(host):
             
         cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', '-o', 'StrictHostKeyChecking=no']
         data_dir, _, ssh_dir_path = get_config_paths()
+        # Ensure known_hosts is writable
+        known_hosts_path = os.path.join(ssh_dir_path, 'known_hosts')
+        cmd.extend(['-o', f'UserKnownHostsFile={known_hosts_path}'])
+        
         if os.path.exists(ssh_dir_path):
             for f in os.listdir(ssh_dir_path):
                 if os.path.isfile(os.path.join(ssh_dir_path, f)) and f not in ['config', 'known_hosts'] and not f.endswith('.pub'):
@@ -402,7 +406,11 @@ def pty_restart(data):
                 remote_cmd = f"cd {quoted_dir} && {remote_cmd}"
                 
             cmd = ['ssh', '-t']
-            _, _, ssh_dir_path = get_config_paths()
+            data_dir, _, ssh_dir_path = get_config_paths()
+            # Ensure known_hosts is writable
+            known_hosts_path = os.path.join(ssh_dir_path, 'known_hosts')
+            cmd.extend(['-o', f'UserKnownHostsFile={known_hosts_path}'])
+            
             if os.path.exists(ssh_dir_path):
                 for f in os.listdir(ssh_dir_path):
                     if os.path.isfile(os.path.join(ssh_dir_path, f)) and f not in ['config', 'known_hosts'] and not f.endswith('.pub'):
