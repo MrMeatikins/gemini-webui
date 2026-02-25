@@ -245,6 +245,16 @@
         let initialAutoResumeDone = false;
         let ctrlActive = false;
 
+        window.addEventListener('popstate', (event) => {
+            const activeTab = tabs.find(t => t.id === activeTabId);
+            if (activeTab && activeTab.state === 'terminal') {
+                // Intercepted! Open launcher (+ New)
+                addNewTab();
+                // Push state back so the next back button also works
+                window.history.pushState({ terminal: true, tabId: activeTabId }, "");
+            }
+        });
+
         const terminalTheme = {
             background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#ffffff', selection: '#264f78',
             black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#e5e510',
@@ -423,6 +433,10 @@
             tab.state = 'terminal'; 
             tab.session = { type, ssh_target: target, ssh_dir: dir, resume: resumeParam }; 
             tab.title = target ? target.split('@').pop() : 'Local';
+            
+            // Back button hijacking: push state so "back" has something to pop
+            window.history.pushState({ terminal: true, tabId: tabId }, "");
+            
             const container = document.getElementById(tabId + '_instance'); container.innerHTML = '';
             
             const termDiv = document.createElement('div'); 
