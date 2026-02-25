@@ -352,8 +352,8 @@
                     <div class="connection-header">
                         <div class="connection-drag-handle" title="Drag to reorder" draggable="true">⠿</div>
                         <div class="connection-title">
-                            <div style="font-size: 11px; color: #888; margin-bottom: 2px;">${conn.label}</div>
-                            <div style="font-size: 14px; font-family: monospace;">${conn.target || 'local'} ${conn.dir || ''}</div>
+                            <div style="font-size: 18px; color: #fff; margin-bottom: 2px;">${conn.label}</div>
+                            <div style="font-size: 11px; font-family: monospace; color: #888; opacity: 0.8;">${conn.target || 'local'} ${conn.dir || ''}</div>
                         </div>
                         <div class="connection-actions">
                             <button class="primary" onclick="startSession('${id}', '${conn.type}', '${conn.target || ''}', '${conn.dir || ''}', false)">Start New</button>
