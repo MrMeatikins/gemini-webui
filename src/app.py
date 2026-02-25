@@ -79,10 +79,17 @@ def cleanup_orphaned_ptys():
 def get_config_paths():
     data_dir = app.config.get('DATA_DIR', os.environ.get('DATA_DIR', "/data"))
     
-    # Check if data_dir is writable, fallback to /tmp if not
-    if not os.access(os.path.dirname(data_dir.rstrip('/')), os.W_OK) and not os.access(data_dir, os.W_OK):
-        data_dir = "/tmp/gemini-data"
-        os.makedirs(data_dir, exist_ok=True)
+    # Check if data_dir is writable
+    data_writable = os.access(data_dir if os.path.exists(data_dir) else os.path.dirname(data_dir.rstrip('/')), os.W_OK)
+    
+    if not data_writable:
+        # Fallback to /tmp
+        if os.access("/tmp", os.W_OK):
+            data_dir = "/tmp/gemini-data"
+            os.makedirs(data_dir, exist_ok=True)
+        else:
+            # Absolute last resort: nothing is writable. Use /data but expect failures.
+            logger.warning("CRITICAL: No writable storage found (/data and /tmp are RO). Functionality will be limited.")
         
     config_file = os.path.join(data_dir, "config.json")
     ssh_dir = os.path.join(data_dir, ".ssh")
@@ -98,6 +105,8 @@ def get_config():
         "LDAP_AUTHORIZED_GROUP": LDAP_AUTHORIZED_GROUP,
         "LDAP_FALLBACK_DOMAIN": LDAP_FALLBACK_DOMAIN,
         "ALLOWED_ORIGINS": os.environ.get('ALLOWED_ORIGINS', '*'),
+        "DATA_WRITABLE": os.access(os.path.dirname(config_file), os.W_OK),
+        "TMP_WRITABLE": os.access("/tmp", os.W_OK),
         "HOSTS": [
             { "label": 'local', "type": 'local' }
         ]
@@ -118,8 +127,7 @@ def init_app():
     data_dir, config_file, ssh_dir = get_config_paths()
     logger.info(f"Initializing app with DATA_DIR: {data_dir}")
     
-    # Try to initialize data directory, fallback to /tmp if read-only
-    is_writable = True
+    # Try FS operations but don't crash if they fail (RO filesystem)
     try:
         os.makedirs(ssh_dir, mode=0o700, exist_ok=True)
         gemini_data = os.path.join(data_dir, ".gemini")
@@ -135,8 +143,7 @@ def init_app():
                     for root, dirs, files in os.walk(path):
                         for d in dirs: shutil.chown(os.path.join(root, d), user='node', group='node')
                         for f in files: shutil.chown(os.path.join(root, f), user='node', group='node')
-            except Exception as e:
-                logger.error(f"Failed to fix permissions for {path}: {e}")
+            except Exception: pass
         
         # Generate instance SSH key if not exists
         key_path = os.path.join(ssh_dir, 'id_ed25519')
@@ -147,19 +154,14 @@ def init_app():
                 shutil.chown(key_path, user='node', group='node')
                 shutil.chown(key_path + '.pub', user='node', group='node')
                 os.chmod(key_path, 0o600)
-            except Exception as e:
-                logger.error(f"Failed to generate SSH key: {e}")
-    except OSError as e:
-        if e.errno == 30: # Read-only file system
-            logger.warning(f"DATA_DIR {data_dir} is read-only. Persistence disabled.")
-            is_writable = False
-        else:
-            raise e
+            except Exception: pass
+    except Exception as e:
+        logger.warning(f"FS initialization partially failed (likely RO filesystem): {e}")
 
     # Manage symlink /home/node/.gemini -> [current gemini_data]
     home_gemini = "/home/node/.gemini"
+    gemini_data = os.path.join(data_dir, ".gemini")
     try:
-        # We might need to recreate the symlink if we fell back to /tmp
         if os.path.islink(home_gemini):
             if os.readlink(home_gemini) != gemini_data:
                 os.unlink(home_gemini)
@@ -167,8 +169,7 @@ def init_app():
         elif not os.path.exists(home_gemini):
             os.makedirs(os.path.dirname(home_gemini), exist_ok=True)
             os.symlink(gemini_data, home_gemini)
-    except Exception as e:
-        logger.error(f"Failed to manage home symlink: {e}")
+    except Exception: pass
     
     config = get_config()
     LDAP_SERVER = config.get('LDAP_SERVER')
@@ -349,6 +350,8 @@ def fetch_sessions_for_host(host):
         data_dir, _, ssh_dir_path = get_config_paths()
         # Ensure known_hosts is writable
         known_hosts_path = os.path.join(ssh_dir_path, 'known_hosts')
+        if not os.access(ssh_dir_path, os.W_OK) and not os.access(known_hosts_path, os.W_OK):
+            known_hosts_path = "/dev/null"
         cmd.extend(['-o', f'UserKnownHostsFile={known_hosts_path}'])
         
         if os.path.exists(ssh_dir_path):
@@ -478,8 +481,10 @@ def pty_restart(data):
                 
             cmd = ['ssh', '-t']
             data_dir, _, ssh_dir_path = get_config_paths()
-            # Ensure known_hosts is writable
+            # Ensure known_hosts is writable, fallback to /dev/null if not
             known_hosts_path = os.path.join(ssh_dir_path, 'known_hosts')
+            if not os.access(ssh_dir_path, os.W_OK) and not os.access(known_hosts_path, os.W_OK):
+                known_hosts_path = "/dev/null"
             cmd.extend(['-o', f'UserKnownHostsFile={known_hosts_path}'])
             
             if os.path.exists(ssh_dir_path):

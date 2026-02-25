@@ -291,11 +291,29 @@
         }
 
         async function renderLauncher(id) {
+            const config = await (await fetch('/api/config')).json();
             const container = document.getElementById(id + '_instance');
+            
+            let warningHtml = '';
+            if (!config.DATA_WRITABLE && !config.TMP_WRITABLE) {
+                warningHtml = `
+                    <div style="background: #cd3131; color: white; padding: 15px; border-radius: 6px; margin-bottom: 20px; font-size: 13px; line-height: 1.4;">
+                        <strong>CRITICAL: No writable storage found.</strong><br>
+                        Both /data and /tmp are read-only. Settings and keys cannot be saved. 
+                        Local sessions will not persist. Please mount a volume or enable tmpfs.
+                    </div>`;
+            } else if (!config.DATA_WRITABLE) {
+                warningHtml = `
+                    <div style="background: #e5e510; color: #000; padding: 10px; border-radius: 6px; margin-bottom: 20px; font-size: 12px;">
+                        <strong>WARNING:</strong> Persistent storage (/data) is not writable. 
+                        Using temporary storage. Settings will be lost on restart.
+                    </div>`;
+            }
+
             container.innerHTML = `
                 <div class="launcher">
                     <h2>Select a Connection</h2>
-                    
+                    ${warningHtml}
                     <!-- Quick Connect Bar -->
                     <div class="quick-connect-bar">
                         <span class="quick-connect-label">ssh</span>
