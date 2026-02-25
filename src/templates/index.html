@@ -299,46 +299,42 @@
             });
             tab.fitAddon = new FitAddon.FitAddon(); tab.term.loadAddon(tab.fitAddon);
             
+            tab.term.open(termDiv);
+            
             // Improved Web Links support
             try {
-                const linkHandler = (event, url) => {
-                    console.log("Opening link:", url);
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                };
+                // Simplified URL regex
+                const urlRegex = /https?:\/\/[^\s"'<>^`]+[^\s"'<>^`.,!?;:]/g;
                 
-                // Regex for URLs
-                const urlRegex = /https?:\/\/[^\s^"^{}^|^\\^<^>^`]+[^\s^"^{}^|^\\^<^>^`^.^:^,^!^?^}]/g;
-                
-                if (window.WebLinksAddon && window.WebLinksAddon.WebLinksAddon) {
-                    // Use the addon but with custom handler if possible
-                    // Note: standard WebLinksAddon doesn't easily support "no-ctrl" without custom provider
-                    // so we register our own provider for better control
-                    tab.term.registerLinkProvider({
-                        provideLinks(bufferLineNumber, callback) {
-                            const line = tab.term.buffer.active.getLine(bufferLineNumber - 1);
-                            if (!line) return callback(undefined);
-                            const text = line.translateToString(true);
-                            const links = [];
-                            let match;
-                            while ((match = urlRegex.exec(text)) !== null) {
-                                links.push({
-                                    text: match[0],
-                                    range: {
-                                        start: { x: match.index + 1, y: bufferLineNumber },
-                                        end: { x: match.index + match[0].length, y: bufferLineNumber }
-                                    },
-                                    activate: (event, text) => linkHandler(event, text)
-                                });
-                            }
-                            callback(links);
+                tab.term.registerLinkProvider({
+                    provideLinks(y, callback) {
+                        const line = tab.term.buffer.active.getLine(y - 1);
+                        if (!line) return callback(undefined);
+                        const text = line.translateToString(true);
+                        const links = [];
+                        let match;
+                        while ((match = urlRegex.exec(text)) !== null) {
+                            const uri = match[0];
+                            links.push({
+                                text: uri,
+                                range: {
+                                    start: { x: match.index + 1, y: y },
+                                    end: { x: match.index + uri.length, y: y }
+                                },
+                                activate: (e, text) => {
+                                    console.log("Activating link:", text);
+                                    window.open(text, '_blank', 'noopener,noreferrer');
+                                }
+                            });
                         }
-                    });
-                    console.log("Custom LinkProvider registered. Regular click should work.");
-                }
+                        if (links.length > 0) console.log(`Detected ${links.length} links on line ${y}`);
+                        callback(links);
+                    }
+                });
+                console.log("Custom LinkProvider registered.");
             } catch (e) {
                 console.error("Failed to setup link provider:", e);
             }
-            tab.term.open(termDiv);
             
             // The "Single Character Buffer Hack" for Android keyboards
             // We disable autocorrect and clear the buffer after each input to prevent the OS from "seeing" words to correct.
@@ -595,4 +591,4 @@
         }
     </script>
 </body>
-</html>
+</html>// Force redeploy Tue Feb 24 10:24:26 PM EST 2026
