@@ -402,7 +402,7 @@ def pty_restart(data):
                         cmd.extend(['-i', os.path.join(ssh_dir_path, f)])
             cmd.extend(['-o', 'PreferredAuthentications=publickey,password', '-o', 'StrictHostKeyChecking=no', ssh_target, remote_cmd])
         else:
-            cmd = ['gemini']
+            cmd = ['/usr/local/bin/gemini']
             if resume is True: cmd.append('-r')
             elif resume and str(resume).isdigit(): cmd.extend(['-r', str(resume)])
         os.execvp(cmd[0], cmd)
