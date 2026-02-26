@@ -20,8 +20,8 @@ def mobile_page(server):
         browser.close()
 
 @pytest.mark.timeout(10)
-def test_mobile_momentum_config(mobile_page):
-    """Verify that CSS momentum scrolling rules are applied on mobile."""
+def test_mobile_ghost_scroll(mobile_page):
+    """Verify that Ghost Scroll overlay handles momentum and interactivity."""
     # Wait for either the terminal or any button in the active launcher tab
     mobile_page.wait_for_function("""
         () => document.querySelector('.xterm-screen') || 
@@ -31,24 +31,19 @@ def test_mobile_momentum_config(mobile_page):
     if not mobile_page.locator('.xterm-screen').is_visible():
         mobile_page.locator('.tab-instance.active button').filter(has_text="Start New").first.click()
     
-    mobile_page.wait_for_selector('.xterm-screen', timeout=5000)
+    mobile_page.wait_for_selector('.ghost-scroll', timeout=5000)
     
-    screen = mobile_page.locator('.xterm-screen')
-    viewport = mobile_page.locator('.xterm-viewport')
+    ghost = mobile_page.locator('.ghost-scroll')
     
-    # 1. Screen should have pointer-events: none to allow swipe passthrough
-    expect(screen).to_have_css("pointer-events", "none")
+    # 1. Initial state: ghost should be pointer-events: none (transparent)
+    expect(ghost).to_have_css("pointer-events", "none")
     
-    # 2. Viewport should have pointer-events: all and be roughly full width
-    expect(viewport).to_have_css("pointer-events", "all")
+    # 2. Touchstart: ghost should become pointer-events: all (capture momentum)
+    mobile_page.dispatch_event('.terminal-instance', 'touchstart')
+    expect(ghost).to_have_css("pointer-events", "all")
     
-    # Verify it's at least as wide as the terminal content (allowing for padding)
-    is_full_width = viewport.evaluate("""el => {
-        const parentWidth = el.parentElement.clientWidth;
-        return Math.abs(el.clientWidth - parentWidth) <= 2;
-    }""")
-    assert is_full_width, f"Viewport width {viewport.evaluate('el => el.clientWidth')} should match parent width"
-    
-    # 3. Interactive bits should still have pointer-events: all
-    helpers = mobile_page.locator('.xterm-helpers')
-    expect(helpers).to_have_css("pointer-events", "all")
+    # 3. Touchend: ghost should eventually return to none
+    mobile_page.dispatch_event('.terminal-instance', 'touchend')
+    # Our logic uses a 1000ms timeout to allow momentum to play out
+    time.sleep(1.2)
+    expect(ghost).to_have_css("pointer-events", "none")

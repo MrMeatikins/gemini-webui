@@ -63,40 +63,40 @@
         #terminal-container { flex-grow: 1; padding: 0; position: relative; overflow: hidden; }
         .tab-instance { position: absolute; top: 0; left: 0; width: 100%; height: 100%; visibility: hidden; box-sizing: border-box; background: #1e1e1e;}
         .tab-instance.active { visibility: visible; }
-        .terminal-instance { width: 100%; height: 100%; padding: 5px; box-sizing: border-box; direction: ltr !important; }
+        .terminal-instance { width: 100%; height: 100%; padding: 5px; box-sizing: border-box; direction: ltr !important; position: relative;}
         .xterm-link { text-decoration: underline !important; cursor: pointer !important; pointer-events: all !important; }
         
-        /* Mobile Momentum Physics: The 'Swiss Cheese' Strategy */
+        /* Ghost Scroll Momentum Strategy */
+        .ghost-scroll {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            z-index: 10;
+            display: none;
+            -webkit-overflow-scrolling: touch;
+            pointer-events: none; /* Transparent by default */
+        }
+        .ghost-scroll-content {
+            width: 1px;
+            pointer-events: none;
+        }
+        
+        @media (max-width: 1080px) {
+            .ghost-scroll { display: block; }
+            .xterm-viewport { display: none !important; } /* Hide xterm's internal scroll */
+            .xterm-screen { pointer-events: all !important; } /* Allow clicking beneath ghost */
+        }
+        
+        /* Mobile Momentum Physics */
         @media (max-width: 1080px) {
             #mobile-controls { display: grid !important; }
             #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
             #active-connection-info { gap: 5px; }
             body { height: 100vh; height: 100dvh; height: -webkit-fill-available; position: fixed; top: 0; left: 0; width: 100%; }
-            
-            .xterm-viewport { 
-                width: 100% !important; 
-                display: block !important; 
-                background: transparent !important; 
-                z-index: 1 !important; 
-                pointer-events: all !important;
-                -webkit-overflow-scrolling: touch !important;
-                direction: ltr !important;
-            }
-            .xterm-screen { 
-                z-index: 2 !important; 
-                pointer-events: none !important; /* Let swipes pass to viewport */
-            }
-            .xterm-helpers, .xterm-cursor-layer, .xterm-link {
-                pointer-events: all !important; /* Keep interactive bits working */
-            }
-            /* Clean scrollbar for mobile */
-            .xterm-viewport::-webkit-scrollbar {
-                width: 5px;
-            }
-            .xterm-viewport::-webkit-scrollbar-thumb {
-                background: rgba(255,255,255,0.2);
-                border-radius: 5px;
-            }
         }
         
         /* Quick Connect Bar */
@@ -610,6 +610,58 @@
             tab.fitAddon = new FitAddon.FitAddon(); tab.term.loadAddon(tab.fitAddon);
             
             tab.term.open(termDiv);
+
+            // Ghost Scroll Implementation for Native Momentum
+            if (isMobile) {
+                const ghost = document.createElement('div');
+                ghost.className = 'ghost-scroll';
+                const ghostContent = document.createElement('div');
+                ghostContent.className = 'ghost-scroll-content';
+                ghost.appendChild(ghostContent);
+                termDiv.appendChild(ghost);
+
+                let isSyncing = false;
+                
+                // 1. Sync Terminal -> Ghost (on data/scroll)
+                tab.term.onScroll(() => {
+                    if (isSyncing) return;
+                    isSyncing = true;
+                    const dims = tab.term._core._renderService.dimensions;
+                    const scrollTop = tab.term.buffer.active.viewportY * dims.actualCellHeight;
+                    ghost.scrollTop = scrollTop;
+                    isSyncing = false;
+                });
+
+                // 2. Sync Ghost -> Terminal (on user swipe)
+                ghost.addEventListener('scroll', () => {
+                    if (isSyncing) return;
+                    isSyncing = true;
+                    const dims = tab.term._core._renderService.dimensions;
+                    const line = Math.round(ghost.scrollTop / dims.actualCellHeight);
+                    tab.term.scrollToLine(line);
+                    isSyncing = false;
+                }, {passive: true});
+
+                // 3. Orchestrate Touch (Activate ghost only on swipe)
+                termDiv.addEventListener('touchstart', (e) => {
+                    // Update content height to match buffer
+                    const dims = tab.term._core._renderService.dimensions;
+                    const totalHeight = tab.term.buffer.active.length * dims.actualCellHeight;
+                    ghostContent.style.height = totalHeight + 'px';
+                    
+                    // Always enable pointer events on touch so browser handles momentum
+                    ghost.style.pointerEvents = 'all';
+                }, {passive: true});
+
+                termDiv.addEventListener('touchend', () => {
+                    // We can't disable pointerEvents immediately or momentum stops.
+                    // Instead, we wait for the scroll to settle or a small timeout.
+                    setTimeout(() => {
+                        // Only disable if we aren't currently scrolling (simplified)
+                        ghost.style.pointerEvents = 'none';
+                    }, 1000); 
+                }, {passive: true});
+            }
 
             // Passive touch listener to ensure the browser doesn't wait for JS
             // before initiating a native scroll on the viewport.
