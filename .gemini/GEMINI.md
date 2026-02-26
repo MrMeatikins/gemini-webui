@@ -56,6 +56,7 @@ The project uses a custom Jenkins pipeline defined in the `Jenkinsfile`:
 **MANDATORY**: Never use `git push` directly. Use `git p`.
 - This is a custom alias that runs `git push && ./jenkins/wait-for-receipt.sh`.
 - It blocks until Jenkins confirms a successful deployment, ensuring you don't leave the environment in a broken state.
+- **REMEMBER**: The job's not done till `git p` is run.
 
 ### SSH Identity
 The `Dockerfile` and `Jenkinsfile` work together to inject an SSH private key (`id_ed25519`) and configure `~/.ssh/config` at build time. The username is dynamically injected into `src/GEMINI.md` for user reference.

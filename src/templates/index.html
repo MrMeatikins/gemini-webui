@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Gemini WebUI</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.ico">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha256-gy8/LGA7Q61DUf8ElwFQzHqHMBQnbbEmpgZcbdgeSHI=" crossorigin="anonymous" />
@@ -15,9 +15,8 @@
             overflow: hidden; 
             height: 100%; 
             width: 100%; 
-            overscroll-behavior: none;
+            overscroll-behavior: contain;
             -webkit-overflow-scrolling: touch;
-            touch-action: pan-y;
         }
         body { 
             display: flex; 
@@ -62,6 +61,7 @@
         button.small { padding: 2px 8px; font-size: 11px; }
         
         #terminal-container { flex-grow: 1; padding: 0; position: relative; overflow: hidden; }
+        .xterm-viewport { -webkit-overflow-scrolling: touch !important; overscroll-behavior-y: contain; }
         .tab-instance { position: absolute; top: 0; left: 0; width: 100%; height: 100%; visibility: hidden; box-sizing: border-box; background: #1e1e1e;}
         .tab-instance.active { visibility: visible; }
         .terminal-instance { width: 100%; height: 100%; padding: 5px; box-sizing: border-box; }
@@ -105,10 +105,11 @@
             overflow-y: auto;
             border-radius: 8px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            touch-action: pan-y;
         }
         
         /* Launcher Styles */
-        .launcher { padding: 30px; color: #ccc; overflow-y: auto; height: 100%; max-width: 900px; margin: 0 auto; overscroll-behavior: contain;}
+        .launcher { padding: 30px; color: #ccc; overflow-y: auto; height: 100%; max-width: 900px; margin: 0 auto; overscroll-behavior: contain; touch-action: pan-y;}
         .launcher h2 { color: white; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; font-weight: 500;}
         .connection-card { background: #252526; border-radius: 6px; padding: 15px; margin-bottom: 15px; border: 1px solid #333; transition: opacity 0.2s, transform 0.2s; }
         .connection-card:hover { border-color: #444; }
@@ -187,6 +188,7 @@
             #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
             #active-connection-info { gap: 5px; }
             body { height: 100vh; height: 100dvh; height: -webkit-fill-available; position: fixed; top: 0; left: 0; width: 100%; }
+            .xterm-viewport { width: 30px !important; }
         }
 
         /* Modern Dark Scrollbar */
