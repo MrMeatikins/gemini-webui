@@ -66,6 +66,7 @@
             overscroll-behavior-y: auto; 
             touch-action: pan-y !important; 
             z-index: 1;
+            background-color: transparent !important;
         }
         .xterm-screen { 
             z-index: 2;
@@ -76,11 +77,14 @@
             .xterm-screen {
                 pointer-events: none; /* Let swipes hit the viewport */
             }
-            .xterm-link, .xterm-cursor-layer {
+            .xterm-link, .xterm-cursor-layer, .xterm-helpers {
                 pointer-events: all; /* Keep links and cursor interactive */
             }
             .terminal-instance {
                 pointer-events: all;
+            }
+            .xterm-viewport {
+                width: 100% !important;
             }
         }
         .tab-instance { position: absolute; top: 0; left: 0; width: 100%; height: 100%; visibility: hidden; box-sizing: border-box; background: #1e1e1e;}
@@ -404,6 +408,10 @@
             container.innerHTML = `
                 <div class="launcher">
                     <h2>Select a Connection</h2>
+                    <div style="font-size: 11px; color: #888; margin-bottom: 15px; background: #2a2d2e; padding: 10px; border-radius: 4px; border-left: 3px solid #3b8eea;">
+                        <strong>Note:</strong> Sessions are isolated by project directory and user. 
+                        If you don't see your sessions, ensure the path below matches your host project.
+                    </div>
                     ${warningHtml}
                     <!-- Quick Connect Bar -->
                     <div class="quick-connect-bar">
@@ -601,26 +609,27 @@
             
             tab.term.open(termDiv);
 
-            // Improved mobile scrolling: Toggle pointer-events on the screen to allow 
-            // the viewport to capture swipes for momentum, while still allowing 
-            // links to be clicked when tapped.
+            // Native Momentum Passthrough: Forces the browser to use its high-performance 
+            // scroll engine instead of xterm.js's manual line-scrolling.
             if (isMobile) {
-                const screen = termDiv.querySelector('.xterm-screen');
                 const viewport = termDiv.querySelector('.xterm-viewport');
-                
-                termDiv.addEventListener('touchstart', (e) => {
-                    // On touch start, we disable pointer events on the screen so the 
-                    // swipe goes to the viewport (which has native momentum).
-                    if (screen) screen.style.pointerEvents = 'none';
-                }, {passive: true});
+                if (viewport) {
+                    viewport.style.width = '100%';
+                    viewport.style.zIndex = '10';
+                    viewport.style.pointerEvents = 'none';
+                    viewport.style.background = 'transparent';
+                    
+                    termDiv.addEventListener('touchstart', (e) => {
+                        viewport.style.pointerEvents = 'all';
+                    }, {passive: true});
 
-                termDiv.addEventListener('touchend', (e) => {
-                    // On touch end, we re-enable pointer events so clicking works.
-                    if (screen) screen.style.pointerEvents = 'all';
-                }, {passive: true});
-                
-                // If the user is just tapping, the click will still fire on the screen
-                // because touchend happens before the click event.
+                    termDiv.addEventListener('touchend', (e) => {
+                        // Return to transparent mode for clicks/links
+                        setTimeout(() => {
+                            viewport.style.pointerEvents = 'none';
+                        }, 50);
+                    }, {passive: true});
+                }
             }
 
             // Passive touch listener hack to force native momentum scrolling on mobile
