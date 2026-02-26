@@ -17,6 +17,7 @@
             width: 100%; 
             overscroll-behavior: none;
             -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
         }
         body { 
             display: flex; 
@@ -571,7 +572,7 @@
                 allowProposedApi: true, 
                 theme: terminalTheme,
                 scrollOnUserInput: true,
-                scrollOnData: true
+                scrollOnData: false
             });
             tab.fitAddon = new FitAddon.FitAddon(); tab.term.loadAddon(tab.fitAddon);
             
@@ -801,10 +802,15 @@
         // Handle mobile keyboard resizing using Visual Viewport API
         if (window.visualViewport) {
             let resizeTimeout;
+            let lastViewHeight = window.visualViewport.height;
             window.visualViewport.addEventListener('resize', () => {
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(() => {
                     const viewHeight = window.visualViewport.height;
+                    // Ignore tiny jitters (less than 20px) to prevent scroll interruption
+                    if (Math.abs(viewHeight - lastViewHeight) < 20) return;
+                    lastViewHeight = viewHeight;
+
                     const totalHeight = window.innerHeight;
                     const keyboardHeight = totalHeight - viewHeight;
                     
