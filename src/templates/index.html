@@ -7,8 +7,27 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.ico">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha256-gy8/LGA7Q61DUf8ElwFQzHqHMBQnbbEmpgZcbdgeSHI=" crossorigin="anonymous" />
     <style>
-        html, body { margin: 0; padding: 0; background-color: #000; overflow: hidden; height: 100%; width: 100%; overscroll-behavior: none; }
-        body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
+        * { box-sizing: border-box; }
+        html, body { 
+            margin: 0; 
+            padding: 0; 
+            background-color: #000; 
+            overflow: hidden; 
+            height: 100%; 
+            width: 100%; 
+            overscroll-behavior: none;
+            -webkit-overflow-scrolling: touch;
+        }
+        body { 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            height: 100dvh; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
         #toolbar { background-color: #333; padding: 10px; display: flex; gap: 10px; align-items: center; }
         #tab-bar { background-color: #222; display: flex; overflow-x: auto; padding: 0 5px; }
         .tab { 
@@ -88,7 +107,7 @@
         }
         
         /* Launcher Styles */
-        .launcher { padding: 30px; color: #ccc; overflow-y: auto; height: 100%; max-width: 900px; margin: 0 auto;}
+        .launcher { padding: 30px; color: #ccc; overflow-y: auto; height: 100%; max-width: 900px; margin: 0 auto; overscroll-behavior: contain;}
         .launcher h2 { color: white; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; font-weight: 500;}
         .connection-card { background: #252526; border-radius: 6px; padding: 15px; margin-bottom: 15px; border: 1px solid #333; transition: opacity 0.2s, transform 0.2s; }
         .connection-card:hover { border-color: #444; }
@@ -166,7 +185,7 @@
             #mobile-controls { display: grid !important; }
             #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
             #active-connection-info { gap: 5px; }
-            body { height: 100vh; height: 100dvh; height: -webkit-fill-available; position: fixed; width: 100%; }
+            body { height: 100vh; height: 100dvh; height: -webkit-fill-available; position: fixed; top: 0; left: 0; width: 100%; }
         }
 
         /* Modern Dark Scrollbar */
@@ -785,8 +804,6 @@
             window.visualViewport.addEventListener('resize', () => {
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(() => {
-                    const viewHeight = window.visualViewport.height;
-                    document.body.style.height = viewHeight + 'px';
                     window.scrollTo(0, 0);
                     tabs.forEach(tab => fitTerminal(tab));
                 }, 100);
