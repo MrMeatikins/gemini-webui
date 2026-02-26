@@ -804,6 +804,13 @@
             window.visualViewport.addEventListener('resize', () => {
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(() => {
+                    const viewHeight = window.visualViewport.height;
+                    const totalHeight = window.innerHeight;
+                    const keyboardHeight = totalHeight - viewHeight;
+                    
+                    // Pin to visible area by adding padding to the bottom
+                    document.body.style.paddingBottom = Math.max(0, keyboardHeight) + 'px';
+                    
                     window.scrollTo(0, 0);
                     tabs.forEach(tab => fitTerminal(tab));
                 }, 100);
