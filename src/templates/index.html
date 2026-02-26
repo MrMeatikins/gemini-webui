@@ -15,7 +15,7 @@
             overflow: hidden; 
             height: 100%; 
             width: 100%; 
-            overscroll-behavior: contain;
+            overscroll-behavior: auto;
             -webkit-overflow-scrolling: touch;
         }
         body { 
@@ -61,10 +61,11 @@
         button.small { padding: 2px 8px; font-size: 11px; }
         
         #terminal-container { flex-grow: 1; padding: 0; position: relative; overflow: hidden; }
-        .xterm-viewport { -webkit-overflow-scrolling: touch !important; overscroll-behavior-y: contain; }
+        .xterm-viewport { -webkit-overflow-scrolling: touch !important; overscroll-behavior-y: auto; touch-action: pan-y !important; }
         .tab-instance { position: absolute; top: 0; left: 0; width: 100%; height: 100%; visibility: hidden; box-sizing: border-box; background: #1e1e1e;}
         .tab-instance.active { visibility: visible; }
-        .terminal-instance { width: 100%; height: 100%; padding: 5px; box-sizing: border-box; }
+        .terminal-instance { width: 100%; height: 100%; padding: 5px; box-sizing: border-box; touch-action: pan-y !important; }
+        .xterm-screen { touch-action: pan-y !important; }
         .xterm-link { text-decoration: underline !important; cursor: pointer !important; }
         
         /* Quick Connect Bar */
@@ -579,6 +580,9 @@
             tab.fitAddon = new FitAddon.FitAddon(); tab.term.loadAddon(tab.fitAddon);
             
             tab.term.open(termDiv);
+
+            // Passive touch listener hack to force native momentum scrolling on mobile
+            termDiv.addEventListener('touchmove', (e) => {}, {passive: true});
             
             // Improved Web Links support with wrapped line handling
             try {
