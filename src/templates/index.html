@@ -89,6 +89,7 @@
         @media (max-width: 1080px) {
             .mobile-scroll-proxy { display: block; }
             .xterm-viewport { display: none !important; }
+            .modal-content { width: 95%; margin: 5% auto; padding: 15px; }
             
             /* Mobile Controls */
             #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
@@ -336,6 +337,7 @@
         let activeTabId = null;
         let initialAutoResumeDone = false;
         let ctrlActive = false;
+        let launcherRefreshInterval = null;
 
         function saveTabsToStorage() {
             const data = tabs.map(t => ({
@@ -484,26 +486,37 @@
                     </div>
                 </div>`;
 
-            // Fetch backend sessions
-            fetch('/api/management/sessions').then(r => r.json()).then(sessions => {
+            const refreshManagedSessions = () => {
                 const listEl = document.getElementById(`${id}_backend_sessions`);
-                if (!sessions || sessions.length === 0) {
-                    listEl.innerHTML = '<div style="padding: 10px; color: #444; font-size: 11px;">No detached sessions found on the server.</div>';
-                    return;
-                }
-                let html = '';
-                sessions.forEach(s => {
-                    html += `
-                        <div class="session-item" style="background: #252526; margin-bottom: 5px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                            <div class="session-info">
-                                <div style="color: #ccc; font-size: 13px;">${s.title}</div>
-                                <div style="color: #666; font-size: 10px;">ID: ${s.tab_id} ${s.is_orphaned ? '(Orphaned)' : '(Active on another device)'}</div>
-                            </div>
-                            <button class="small primary" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
-                        </div>`;
-                });
-                listEl.innerHTML = html;
-            });
+                if (!listEl) return; // Tab closed or switched
+                
+                fetch('/api/management/sessions').then(r => r.json()).then(sessions => {
+                    if (!sessions || sessions.length === 0) {
+                        listEl.innerHTML = '<div style="padding: 10px; color: #444; font-size: 11px;">No detached sessions found on the server.</div>';
+                        return;
+                    }
+                    let html = '';
+                    sessions.forEach(s => {
+                        html += `
+                            <div class="session-item" style="background: #252526; margin-bottom: 5px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                                <div class="session-info">
+                                    <div style="color: #ccc; font-size: 13px;">${s.title}</div>
+                                    <div style="color: #666; font-size: 10px;">ID: ${s.tab_id} ${s.is_orphaned ? '(Orphaned)' : '(Active on another device)'}</div>
+                                </div>
+                                <button class="small primary" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
+                            </div>`;
+                    });
+                    listEl.innerHTML = html;
+                }).catch(e => console.error("Session fetch failed", e));
+            };
+
+            // Initial fetch
+            refreshManagedSessions();
+            
+            // Set up polling while this launcher is visible
+            if (launcherRefreshInterval) clearInterval(launcherRefreshInterval);
+            launcherRefreshInterval = setInterval(refreshManagedSessions, 10000);
+
             const hosts = await (await fetch('/api/hosts')).json();
             const connContainer = document.getElementById(id + '_connections');
             let draggedCard = null;
@@ -987,6 +1000,23 @@
 
         function switchTab(id) {
             activeTabId = id; const tab = tabs.find(t => t.id === id); if (!tab) return;
+            
+            if (launcherRefreshInterval) {
+                clearInterval(launcherRefreshInterval);
+                launcherRefreshInterval = null;
+            }
+
+            if (tab.state === 'launcher') {
+                // Trigger a refresh and restart polling when switching back to launcher
+                // We don't re-render the whole launcher, just the dynamic parts if they exist
+                const refreshBtn = document.getElementById(`${id}_backend_sessions`);
+                if (refreshBtn) {
+                    // We need a way to call the refreshManagedSessions function. 
+                    // I'll re-render just to be safe and simple for now.
+                    renderLauncher(id);
+                }
+            }
+
             document.querySelectorAll('.tab-instance').forEach(el => el.classList.remove('active'));
             const inst = document.getElementById(id + '_instance'); if (inst) inst.classList.add('active');
             document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
