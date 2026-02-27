@@ -84,17 +84,6 @@
             background: transparent;
         }
         
-        @media (max-width: 1080px) {
-            .mobile-scroll-proxy { display: block; }
-            .xterm-viewport { display: none !important; }
-            .modal-content { width: 95%; margin: 5% auto; padding: 15px; }
-            
-            /* Mobile Controls */
-            #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
-            #active-connection-info { gap: 5px; }
-            body { min-height: 100vh; min-height: 100dvh; height: -webkit-fill-available; width: 100%; }
-        }
-        
         /* Quick Connect Bar */
         .quick-connect-bar {
             background: #2d2d2d;
@@ -235,6 +224,17 @@
         * {
             scrollbar-width: thin;
             scrollbar-color: #444 #1e1e1e;
+        }
+
+        @media (max-width: 1200px) {
+            .mobile-scroll-proxy { display: block; }
+            .xterm-viewport { display: none !important; }
+            .modal-content { width: 98% !important; margin: 10px auto !important; padding: 10px !important; }
+            
+            /* Mobile Controls */
+            #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
+            #active-connection-info { gap: 5px; }
+            body { min-height: 100vh; min-height: 100dvh; height: -webkit-fill-available; width: 100%; }
         }
     </style>
 </head>
@@ -494,17 +494,24 @@
                         return;
                     }
                     let html = '';
-                                        sessions.forEach(s => {
-                                            html += `
-                                                <div class="session-item" style="background: #252526; margin-bottom: 5px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                                    <div class="session-info">
-                                                        <div style="color: #3b8eea; font-weight: bold; font-size: 13px;">${s.title}</div>
-                                                        <div style="color: #888; font-size: 10px;">${s.is_orphaned ? 'Orphaned' : 'Active'} • Last active: ${new Date(s.last_active * 1000).toLocaleTimeString()}</div>
-                                                    </div>
-                                                    <button class="small primary" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
-                                                </div>`;
-                                        });
-                    
+                    sessions.forEach(s => {
+                        const statusColor = s.is_orphaned ? '#888' : '#0dbc79';
+                        const statusLabel = s.is_orphaned ? 'Orphaned' : 'Active';
+                        html += `
+                            <div class="session-item" style="background: #252526; margin-bottom: 8px; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #333;">
+                                <div class="session-info">
+                                    <div style="color: #3b8eea; font-weight: bold; font-size: 14px; margin-bottom: 2px;">Tab: ${s.title}</div>
+                                    <div style="color: #888; font-size: 11px; display: flex; align-items: center; gap: 8px;">
+                                        <span style="color: ${statusColor}; font-weight: bold; display: flex; align-items: center; gap: 4px;">
+                                            <span style="font-size: 14px;">●</span> ${statusLabel}
+                                        </span> 
+                                        <span>•</span>
+                                        <span>Last seen: ${new Date(s.last_active * 1000).toLocaleTimeString()}</span>
+                                    </div>
+                                </div>
+                                <button class="small primary" style="padding: 6px 12px;" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
+                            </div>`;
+                    });
                     listEl.innerHTML = html;
                 }).catch(e => console.error("Session fetch failed", e));
             };
@@ -710,8 +717,8 @@
                     sorted.slice(0, displayCount).forEach(s => {
                         html += `<div class="session-item">
                             <div class="session-info">
-                                <span class="session-name">#${s.id}: ${s.name}</span>
-                                <span style="font-size: 10px; opacity: 0.7; margin-left: 10px;">(${s.meta})</span>
+                                <span class="session-name">Session: ${s.name}</span>
+                                <span style="font-size: 10px; opacity: 0.7; margin-left: 10px;">(ID #${s.id} • ${s.meta})</span>
                             </div>
                             <div style="display: flex; gap: 5px;">
                                 <button class="small" onclick="startSession('${tabId}', '${conn.type}', '${conn.target || ''}', '${conn.dir || ''}', '${s.id}', '${s.name.replace(/'/g, "\\'")}')">Resume</button>
