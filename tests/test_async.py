@@ -39,13 +39,12 @@ def test_cleanup_orphaned_ptys(mock_socketio):
     with patch('os.kill') as mock_kill, patch('os.waitpid') as mock_wait:
         cleanup_orphaned_ptys()
         
-        # Should have killed 124
-        mock_kill.assert_any_call(124, signal.SIGKILL)
-        # Should NOT have killed 123 or 125
-        with pytest.raises(AssertionError):
-            mock_kill.assert_any_call(123, signal.SIGKILL)
-        with pytest.raises(AssertionError):
-            mock_kill.assert_any_call(125, signal.SIGKILL)
+        # Sessions should NEVER be killed as per the 'never drop them' mandate
+        assert mock_kill.call_count == 0
+        # Verify they still exist in the session manager
+        assert session_manager.get_session('old_orphan') is not None
+        assert session_manager.get_session('new_orphan') is not None
+        assert session_manager.get_session('active') is not None
 
 @patch('src.app.get_config')
 def test_background_session_preloader(mock_get_config):
@@ -92,3 +91,19 @@ def test_pty_restart_basic(mock_socketio, mock_pty):
             session = session_manager.get_session('tab2')
             assert session is not None
             assert session.pid == 999
+
+def test_pty_restart_limit(mock_socketio):
+    from src.app import app, session_manager, Session
+    # Fill up session manager with 20 sessions
+    session_manager.sessions.clear()
+    for i in range(20):
+        session_manager.add_session(Session(f'tab_{i}', i+10, 1000+i, 'admin'))
+    
+    with app.test_request_context('/'):
+        # Attempt to start the 21st session
+        pty_restart({'tab_id': 'tab_too_many', 'sid': 'test-sid'})
+        
+        # Verify socketio emitted the error message
+        mock_socketio.emit.assert_any_call('pty-output', {'output': '\r\n\033[1;31mError: Maximum session limit (20) reached. Please close an existing tab.\033[0m\r\n'}, room='test-sid')
+        # Verify session was NOT added
+        assert session_manager.get_session('tab_too_many') is None
