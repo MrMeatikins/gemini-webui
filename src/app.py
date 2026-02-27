@@ -393,9 +393,13 @@ def read_and_forward_pty_output():
                     if output:
                         decoded_output = decoder.decode(output)
                         if decoded_output:
-                            session.buffer.append(decoded_output)
-                            if sid:
-                                socketio.emit('pty-output', {'output': decoded_output}, room=sid)
+                            # Filter out terminal identification responses (e.g. \x1b[?62;c or \x1b[0c)
+                            # These are often triggered by the terminal on reclaim and shouldn't be buffered.
+                            filtered_output = re.sub(r'\x1b\[\??\d+(?:;\d+)*c', '', decoded_output)
+                            if filtered_output:
+                                session.buffer.append(filtered_output)
+                                if sid:
+                                    socketio.emit('pty-output', {'output': filtered_output}, room=sid)
             except (OSError, IOError, EOFError):
                 logger.info(f"Removing session {tab_id} due to I/O error")
                 session_manager.remove_session(tab_id)

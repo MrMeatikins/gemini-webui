@@ -192,7 +192,18 @@
         }
         .connection-drag-handle:active { cursor: grabbing; }
         .connection-title { font-size: 16px; font-weight: bold; color: #fff; flex-grow: 1; }
-        .connection-actions { display: flex; gap: 8px; }
+        .connection-actions { 
+            display: flex; 
+            gap: 8px; 
+            flex-wrap: wrap; 
+            justify-content: flex-end;
+            min-width: 180px; /* Ensure buttons don't squish too much */
+        }
+        .connection-actions button {
+            flex: 1 1 85px; /* Snap to uniform size, wrap if < 85px */
+            white-space: nowrap;
+            text-align: center;
+        }
         
         .session-list-container { margin-top: 10px; background: #1e1e1e; border-radius: 4px; overflow: hidden; border: 1px solid #2d2d2d;}
         .session-list { list-style: none; padding: 0; margin: 0; }
@@ -598,7 +609,6 @@
                                 </div>
                                 <div style="display: flex; gap: 8px;">
                                     <button class="small primary" style="padding: 6px 12px;" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
-                                    <button class="small danger" style="padding: 6px 12px;" onclick="terminateBackendSession('${id}', '${s.tab_id}')">Terminate</button>
                                 </div>
                             </div>`;
                     });
@@ -753,24 +763,6 @@
                 });
                 if (response.ok) {
                     fetchSessions(tabId, conn, targetId, true, false); // Refresh list
-                } else {
-                    const data = await response.json();
-                    alert("Termination failed: " + (data.error || "Unknown error"));
-                }
-            } catch (e) { console.error(e); }
-        }
-
-        async function terminateBackendSession(launcherTabId, tabId) {
-            if (!confirm(`Are you sure you want to terminate this backend session? Any unsaved work in the terminal will be lost.`)) return;
-            try {
-                const response = await fetch('/api/management/sessions/terminate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tab_id: tabId })
-                });
-                if (response.ok) {
-                    // Trigger a refresh of the launcher that called this
-                    renderLauncher(launcherTabId);
                 } else {
                     const data = await response.json();
                     alert("Termination failed: " + (data.error || "Unknown error"));
