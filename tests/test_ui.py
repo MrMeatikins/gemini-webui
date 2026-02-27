@@ -26,10 +26,10 @@ def page(server):
 @pytest.mark.timeout(10)
 def test_ui_launcher_and_sessions(page):
     """Verify launcher opens and displays mock sessions."""
-    page.locator('#new-tab-btn').click()
-    expect(page.get_by_text("Select a Connection").last).to_be_visible(timeout=5000)
+    # Launcher is open by default on first load
+    expect(page.get_by_text("Select a Connection").first).to_be_visible(timeout=5000)
     # Check for pre-loaded mock sessions
-    expect(page.get_by_text("Mock Session").last).to_be_visible(timeout=5000)
+    expect(page.get_by_text("Mock Session").first).to_be_visible(timeout=5000)
 
 @pytest.mark.prone_to_timeout
 @pytest.mark.timeout(10)
@@ -69,9 +69,15 @@ def test_ui_terminal_initialization(page):
 @pytest.mark.timeout(10)
 def test_ui_tab_management(page):
     """Verify creating and closing tabs works correctly."""
+    # First, turn the initial tab into a terminal so we can create a second launcher tab
+    btns = page.locator('.tab-instance.active button:has-text("Start New")')
+    expect(btns.first).to_be_visible(timeout=5000)
+    btns.first.click()
+    expect(page.locator('#active-connection-info')).to_be_visible(timeout=5000)
+
     initial_tabs = page.locator('.tab').count()
     
-    # Create new tab
+    # Create new tab (this will now be allowed as it's the second launcher)
     page.locator('#new-tab-btn').click()
     expect(page.locator('.tab')).to_have_count(initial_tabs + 1)
     

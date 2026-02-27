@@ -17,6 +17,7 @@ import codecs
 import json
 import shutil
 import shlex
+import collections
 from functools import wraps
 from flask import Flask, render_template, request, Response, session, jsonify
 from werkzeug.utils import secure_filename
@@ -30,7 +31,7 @@ except ImportError:
 
 # Global config holder and defaults
 config = {}
-GEMINI_BIN = os.environ.get('GEMINI_BIN', '/usr/local/bin/gemini')
+GEMINI_BIN = os.environ.get('GEMINI_BIN', '/usr/bin/gemini')
 ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
 ADMIN_PASS = os.environ.get('ADMIN_PASS', 'admin')
 LDAP_SERVER = os.environ.get('LDAP_SERVER')
@@ -51,34 +52,97 @@ app = Flask(__name__, template_folder=template_dir)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
 # Multi-tab support and persistence
-persistent_ptys = {}  # tab_id -> {'fd': fd, 'pid': pid, 'decoder': decoder, 'last_seen': time}
-sid_to_tabid = {}
-tabid_to_sid = {}
-orphaned_ptys = {}    # tab_id -> timestamp
+class Session:
+    def __init__(self, tab_id, fd, pid, title=None, ssh_target=None, ssh_dir=None, resume=True):
+        self.tab_id = tab_id
+        self.fd = fd
+        self.pid = pid
+        self.title = title or ("Local" if not ssh_target else f"SSH: {ssh_target}")
+        self.ssh_target = ssh_target
+        self.ssh_dir = ssh_dir
+        self.resume = resume
+        self.decoder = codecs.getincrementaldecoder('utf-8')()
+        self.buffer = collections.deque(maxlen=10000) # Store last 10k chars
+        self.last_seen = time.time()
+        self.orphaned_at = None
+
+    def to_dict(self):
+        return {
+            "tab_id": self.tab_id,
+            "title": self.title,
+            "ssh_target": self.ssh_target,
+            "ssh_dir": self.ssh_dir,
+            "resume": self.resume,
+            "last_active": self.last_seen,
+            "is_orphaned": self.orphaned_at is not None
+        }
+
+class SessionManager:
+    def __init__(self):
+        self.sessions = {} # tab_id -> Session
+        self.sid_to_tabid = {}
+        self.tabid_to_sid = {}
+
+    def add_session(self, session):
+        self.sessions[session.tab_id] = session
+
+    def get_session(self, tab_id):
+        return self.sessions.get(tab_id)
+
+    def remove_session(self, tab_id):
+        session = self.sessions.pop(tab_id, None)
+        if session:
+            sid = self.tabid_to_sid.pop(tab_id, None)
+            if sid: self.sid_to_tabid.pop(sid, None)
+        return session
+
+    def orphan_session(self, tab_id):
+        session = self.get_session(tab_id)
+        if session:
+            session.orphaned_at = time.time()
+            self.tabid_to_sid.pop(tab_id, None)
+
+    def reclaim_session(self, tab_id, sid):
+        session = self.get_session(tab_id)
+        if session:
+            # If already owned by another SID, disconnect that one
+            old_sid = self.tabid_to_sid.get(tab_id)
+            if old_sid and old_sid != sid:
+                logger.info(f"Stealing session {tab_id} from SID {old_sid} for new SID {sid}")
+                socketio.emit('session-stolen', {'tab_id': tab_id}, room=old_sid)
+                self.sid_to_tabid.pop(old_sid, None)
+            
+            session.orphaned_at = None
+            session.last_seen = time.time()
+            self.sid_to_tabid[sid] = tab_id
+            self.tabid_to_sid[tab_id] = sid
+            return session
+        return None
+
+    def list_sessions(self):
+        return [s.to_dict() for s in self.sessions.values()]
+
+session_manager = SessionManager()
 
 # Background session cache: key -> {"output": str, "error": str, "timestamp": float}
 session_results_cache = {}
 
 def cleanup_orphaned_ptys():
     """Periodically kills PTYs that have been orphaned for too long."""
-    run_once = False
+    is_testing = app.config.get('TESTING') or os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true'
     while True:
-        if app.config.get('TESTING') and run_once:
-            break
-        run_once = True
-        socketio.sleep(10 if not app.config.get('TESTING') else 0.1)
+        socketio.sleep(10 if not is_testing else 0.1)
         now = time.time()
-        for tab_id, ts in list(orphaned_ptys.items()):
-            if now - ts > 60:  # 60 second grace period
+        for tab_id, session in list(session_manager.sessions.items()):
+            if session.orphaned_at and (now - session.orphaned_at > 60):  # 60 second grace period
                 logger.info(f"Cleaning up orphaned PTY for tab: {tab_id}")
-                pty_info = persistent_ptys.pop(tab_id, None)
-                orphaned_ptys.pop(tab_id, None)
-                if pty_info:
-                    try:
-                        os.kill(pty_info['pid'], signal.SIGKILL)
-                        os.waitpid(pty_info['pid'], 0)
-                    except Exception:
-                        pass
+                session_manager.remove_session(tab_id)
+                try:
+                    os.kill(session.pid, signal.SIGKILL)
+                    os.waitpid(session.pid, 0)
+                except Exception:
+                    pass
+        if is_testing: break
 
 def get_config_paths():
     data_dir = app.config.get('DATA_DIR', os.environ.get('DATA_DIR', "/data"))
@@ -270,12 +334,10 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     sid = request.sid
-    tab_id = sid_to_tabid.pop(sid, None)
+    tab_id = session_manager.sid_to_tabid.pop(sid, None)
     if tab_id:
-        tabid_to_sid.pop(tab_id, None)
-        if tab_id in persistent_ptys:
-            logger.info(f"PTY orphaned for tab_id: {tab_id} (sid: {sid})")
-            orphaned_ptys[tab_id] = time.time()
+        session_manager.orphan_session(tab_id)
+        logger.info(f"Session {tab_id} orphaned on disconnect (sid: {sid})")
 
 @app.before_request
 def require_auth():
@@ -313,28 +375,27 @@ def set_winsize(fd, row, col, xpix=0, ypix=0):
 def read_and_forward_pty_output():
     max_read_bytes = 1024 * 20
     while True:
-        if app.config.get('TESTING') and not persistent_ptys:
+        if app.config.get('TESTING') and not session_manager.sessions:
             socketio.sleep(0.1)
-            if not persistent_ptys: break
+            if not session_manager.sessions: break
         socketio.sleep(0.01)
-        for tab_id, pty_info in list(persistent_ptys.items()):
-            fd = pty_info['fd']
-            decoder = pty_info['decoder']
-            sid = tabid_to_sid.get(tab_id)
+        for tab_id, session in list(session_manager.sessions.items()):
+            fd = session.fd
+            decoder = session.decoder
+            sid = session_manager.tabid_to_sid.get(tab_id)
             try:
                 (data_ready, _, _) = select.select([fd], [], [], 0)
                 if data_ready:
                     output = os.read(fd, max_read_bytes)
                     if output:
                         decoded_output = decoder.decode(output)
-                        if decoded_output and sid:
-                            socketio.emit('pty-output', {'output': decoded_output}, room=sid)
+                        if decoded_output:
+                            session.buffer.append(decoded_output)
+                            if sid:
+                                socketio.emit('pty-output', {'output': decoded_output}, room=sid)
             except (OSError, IOError, EOFError):
-                persistent_ptys.pop(tab_id, None)
-                orphaned_ptys.pop(tab_id, None)
-                if sid:
-                    sid_to_tabid.pop(sid, None)
-                    tabid_to_sid.pop(tab_id, None)
+                logger.info(f"Removing session {tab_id} due to I/O error")
+                session_manager.remove_session(tab_id)
 
 def validate_ssh_target(target):
     """Ensure SSH target is in a safe format (user@host, host, or host:port)."""
@@ -429,17 +490,24 @@ def background_session_preloader():
 @socketio.on('pty-input')
 def pty_input(data):
     sid = request.sid
-    tab_id = sid_to_tabid.get(sid)
-    if tab_id in persistent_ptys:
-        os.write(persistent_ptys[tab_id]['fd'], data['input'].encode())
+    tab_id = session_manager.sid_to_tabid.get(sid)
+    session = session_manager.get_session(tab_id)
+    if session:
+        # Filter out terminal identification responses (DA) to prevent loops
+        # e.g. \x1b[?1;2c or similar. These often get echoed back on reclaim.
+        input_data = data['input']
+        if input_data.startswith('\x1b[?') and input_data.endswith('c'):
+            return
+        os.write(session.fd, input_data.encode())
 
 @socketio.on('resize')
 def pty_resize(data):
     sid = request.sid
-    tab_id = sid_to_tabid.get(sid)
-    if tab_id in persistent_ptys:
+    tab_id = session_manager.sid_to_tabid.get(sid)
+    session = session_manager.get_session(tab_id)
+    if session:
         try:
-            set_winsize(persistent_ptys[tab_id]['fd'], data['rows'], data['cols'])
+            set_winsize(session.fd, data['rows'], data['cols'])
         except Exception:
             pass
 
@@ -449,29 +517,30 @@ def pty_restart(data):
     tab_id = data.get('tab_id')
     if not tab_id:
         return
-        
-    # Associate SID with Tab ID
-    sid_to_tabid[sid] = tab_id
-    tabid_to_sid[tab_id] = sid
     
-    # If we already have a PTY for this tab, check if we should reuse it
-    if tab_id in persistent_ptys:
-        if orphaned_ptys.pop(tab_id, None):
-            logger.info(f"Reattached to orphaned PTY for tab: {tab_id}")
-            # Send a clear-ish screen or some marker to indicate reattachment
-            socketio.emit('pty-output', {'output': '\r\n[Reattached]\r\n'}, room=sid)
+    reclaim = data.get('reclaim', False)
+    if reclaim:
+        session = session_manager.reclaim_session(tab_id, sid)
+        if session:
+            logger.info(f"Reattached to session: {tab_id} (sid: {sid})")
+            # Flush the scrollback buffer to the new client
+            for chunk in session.buffer:
+                socketio.emit('pty-output', {'output': chunk}, room=sid)
+            
             # Re-sync terminal size
             try:
-                set_winsize(persistent_ptys[tab_id]['fd'], data.get('rows', 24), data.get('cols', 80))
+                set_winsize(session.fd, data.get('rows', 24), data.get('cols', 80))
             except Exception: pass
             return
-        else:
-            # Explicit restart requested for an active session
-            pty_info = persistent_ptys.pop(tab_id)
-            try:
-                os.kill(pty_info['pid'], signal.SIGKILL)
-                os.waitpid(pty_info['pid'], 0)
-            except Exception: pass
+    
+    # Explicit restart or session not found: Clean up old one first
+    old_session = session_manager.remove_session(tab_id)
+    if old_session:
+        logger.info(f"Killing old session {tab_id} for fresh restart")
+        try:
+            os.kill(old_session.pid, signal.SIGKILL)
+            os.waitpid(old_session.pid, 0)
+        except Exception: pass
             
     resume = data.get('resume', True)
     cols = data.get('cols', 80)
@@ -481,6 +550,7 @@ def pty_restart(data):
     
     (child_pid, fd) = pty.fork()
     if child_pid == 0:
+        # (Child process setup remains same)
         os.environ['TERM'] = 'xterm-256color'
         os.environ['COLORTERM'] = 'truecolor'
         os.environ['FORCE_COLOR'] = '3'
@@ -548,7 +618,11 @@ def pty_restart(data):
         os.execvp(cmd[0], cmd)
         os._exit(0)
     else:
-        persistent_ptys[tab_id] = {'fd': fd, 'pid': child_pid, 'decoder': codecs.getincrementaldecoder('utf-8')()}
+        # Parent process: create a new session
+        session = Session(tab_id, fd, child_pid, ssh_target=ssh_target, ssh_dir=ssh_dir, resume=resume)
+        session_manager.add_session(session)
+        session_manager.reclaim_session(tab_id, sid) # Connect current SID
+        
         try: set_winsize(fd, rows, cols)
         except Exception: pass
         socketio.emit('pty-output', {'output': '\r\nLoading Context...\r\n'}, room=sid)
@@ -566,6 +640,31 @@ def favicon():
 @authenticated_only
 def list_hosts():
     return jsonify(get_config().get('HOSTS', []))
+
+@app.route('/api/management/sessions', methods=['GET'])
+@authenticated_only
+def list_active_sessions():
+    """List all active/orphaned sessions managed by the backend."""
+    return jsonify(session_manager.list_sessions())
+
+@app.route('/api/sessions', methods=['GET'])
+@authenticated_only
+def list_gemini_sessions():
+    ssh_target = request.args.get('ssh_target')
+    ssh_dir = request.args.get('ssh_dir')
+    cache_key = f"{'ssh' if ssh_target else 'local'}:{ssh_target or 'local'}:{ssh_dir or ''}"
+    
+    # Check if we should update or use cache
+    use_cache = request.args.get('cache') == 'true'
+    if use_cache and cache_key in session_results_cache:
+        return jsonify(session_results_cache[cache_key])
+    
+    result = fetch_sessions_for_host({'target': ssh_target, 'dir': ssh_dir, 'type': 'ssh' if ssh_target else 'local'})
+    err = result.get('error')
+    if err and 'timeout' in err.lower():
+        return jsonify(result), 504
+    session_results_cache[cache_key] = result
+    return jsonify(result)
 
 @app.route('/api/hosts', methods=['POST'])
 @authenticated_only
@@ -762,25 +861,6 @@ def remove_ssh_key(filename):
         os.remove(path)
         return jsonify({"status": "success"})
     return jsonify({"status": "error", "message": "File not found"}), 404
-
-@app.route('/api/sessions', methods=['GET'])
-@authenticated_only
-def list_gemini_sessions():
-    ssh_target = request.args.get('ssh_target')
-    ssh_dir = request.args.get('ssh_dir')
-    cache_key = f"{'ssh' if ssh_target else 'local'}:{ssh_target or 'local'}:{ssh_dir or ''}"
-    
-    # Check if we should update or use cache
-    use_cache = request.args.get('cache') == 'true'
-    if use_cache and cache_key in session_results_cache:
-        return jsonify(session_results_cache[cache_key])
-    
-    result = fetch_sessions_for_host({'target': ssh_target, 'dir': ssh_dir, 'type': 'ssh' if ssh_target else 'local'})
-    err = result.get('error')
-    if err and 'timeout' in err.lower():
-        return jsonify(result), 504
-    session_results_cache[cache_key] = result
-    return jsonify(result)
 
 @app.route('/health')
 def health_check_root():

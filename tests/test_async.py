@@ -15,20 +15,26 @@ def mock_pty():
         yield mock_fork
 
 def test_cleanup_orphaned_ptys(mock_socketio):
+    # Ensure it breaks loop
+    os.environ['BYPASS_AUTH_FOR_TESTING'] = 'true'
+    
     # Mock some ptys
-    from src.app import persistent_ptys, orphaned_ptys
+    from src.app import session_manager, Session
     import time
     
     # 1. Active PTY
-    persistent_ptys['active'] = {'pid': 123, 'fd': 4, 'decoder': MagicMock()}
+    active_session = Session('active', 4, 123)
+    session_manager.add_session(active_session)
     
     # 2. Orphaned PTY (old)
-    persistent_ptys['old_orphan'] = {'pid': 124, 'fd': 5, 'decoder': MagicMock()}
-    orphaned_ptys['old_orphan'] = time.time() - 100 # 100s ago
+    old_orphan = Session('old_orphan', 5, 124)
+    old_orphan.orphaned_at = time.time() - 100 # 100s ago
+    session_manager.add_session(old_orphan)
     
     # 3. Orphaned PTY (new)
-    persistent_ptys['new_orphan'] = {'pid': 125, 'fd': 6, 'decoder': MagicMock()}
-    orphaned_ptys['new_orphan'] = time.time() - 10 # 10s ago
+    new_orphan = Session('new_orphan', 6, 125)
+    new_orphan.orphaned_at = time.time() - 10 # 10s ago
+    session_manager.add_session(new_orphan)
 
     with patch('os.kill') as mock_kill, patch('os.waitpid') as mock_wait:
         cleanup_orphaned_ptys()
@@ -82,6 +88,7 @@ def test_pty_restart_basic(mock_socketio, mock_pty):
         with patch('src.app.set_winsize'):
             pty_restart({'tab_id': 'tab2', 'rows': 24, 'cols': 80, 'sid': 'test-sid'})
             
-            from src.app import persistent_ptys
-            assert 'tab2' in persistent_ptys
-            assert persistent_ptys['tab2']['pid'] == 999
+            from src.app import session_manager
+            session = session_manager.get_session('tab2')
+            assert session is not None
+            assert session.pid == 999

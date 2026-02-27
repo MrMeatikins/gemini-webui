@@ -332,7 +332,55 @@
         let activeTabId = null;
         let initialAutoResumeDone = false;
         let ctrlActive = false;
-        
+
+        function saveTabsToStorage() {
+            const data = tabs.map(t => ({
+                id: t.id,
+                title: t.title,
+                state: t.state,
+                session: t.session
+            }));
+            sessionStorage.setItem('gemini_tabs', JSON.stringify(data));
+            sessionStorage.setItem('gemini_active_tab', activeTabId);
+        }
+
+        function loadTabsFromStorage() {
+            const stored = sessionStorage.getItem('gemini_tabs');
+            if (stored) {
+                try {
+                    const data = JSON.parse(stored);
+                    data.forEach(t => {
+                        const tab = { ...t, term: null, fitAddon: null, socket: null };
+                        tabs.push(tab);
+                        const container = document.createElement('div');
+                        container.id = tab.id + '_instance'; container.className = 'tab-instance';
+                        document.getElementById('terminal-container').appendChild(container);
+                        if (tab.state === 'terminal') {
+                            recreateTerminalUI(tab);
+                        } else {
+                            renderLauncher(tab.id);
+                        }
+                    });
+                    activeTabId = sessionStorage.getItem('gemini_active_tab');
+                    if (!tabs.find(t => t.id === activeTabId)) activeTabId = tabs[0].id;
+                    renderTabs();
+                    switchTab(activeTabId);
+                    return true;
+                } catch (e) { console.error("Restore failed", e); sessionStorage.clear(); }
+            }
+            return false;
+        }
+
+        function recreateTerminalUI(tab) {
+            const container = document.getElementById(tab.id + '_instance');
+            container.innerHTML = '';
+            const termDiv = document.createElement('div');
+            termDiv.className = 'terminal-instance';
+            termDiv.id = 'rolling-log-' + tab.id;
+            container.appendChild(termDiv);
+            startSession(tab.id, tab.session.type, tab.session.ssh_target, tab.session.ssh_dir, tab.session.resume, tab.title);
+        }
+
         const isMobile = window.innerWidth <= 1080 || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
         console.log("Environment detection: isMobile =", isMobile);
 
@@ -367,18 +415,20 @@
         }
 
         async function addNewTab(autoResume = false) {
-            const id = 'tab_' + Date.now();
+            // If a launcher tab already exists, just switch to it instead of creating a new one.
+            const existingLauncher = tabs.find(t => t.state === 'launcher');
+            if (existingLauncher) {
+                switchTab(existingLauncher.id);
+                return;
+            }
+
+            const id = 'tab_' + (Date.now() + Math.floor(Math.random() * 1000));
             const tab = { id, term: null, fitAddon: null, socket: null, session: null, title: 'New Tab', state: 'launcher' };
             const container = document.createElement('div');
             container.id = id + '_instance'; container.className = 'tab-instance';
             document.getElementById('terminal-container').appendChild(container);
             tabs.push(tab); renderTabs(); switchTab(id); renderLauncher(id);
-            if (autoResume && !initialAutoResumeDone) {
-                initialAutoResumeDone = true;
-                const response = await fetch('/api/sessions?cache=true');
-                const data = await response.json();
-                if (parseSessions(data.output || "").length > 0) startSession(id, 'local', '', '', true);
-            }
+            saveTabsToStorage();
         }
 
         async function renderLauncher(id) {
@@ -418,7 +468,38 @@
                     </div>
 
                     <div id="${id}_connections" class="connections-list"></div>
+                    
+                    <div class="backend-sessions-container" style="margin-top: 30px; border-top: 1px solid #333; padding-top: 20px;">
+                        <h3 style="color: #888; margin-bottom: 15px;">Backend Managed Sessions</h3>
+                        <div style="font-size: 11px; color: #666; margin-bottom: 15px;">
+                            These are PTY processes running on the server. Reclaiming one will attach it to this window.
+                        </div>
+                        <div id="${id}_backend_sessions" class="session-list">
+                            <div style="padding: 10px; color: #444; font-size: 11px;">Checking for backend sessions...</div>
+                        </div>
+                    </div>
                 </div>`;
+
+            // Fetch backend sessions
+            fetch('/api/management/sessions').then(r => r.json()).then(sessions => {
+                const listEl = document.getElementById(`${id}_backend_sessions`);
+                if (!sessions || sessions.length === 0) {
+                    listEl.innerHTML = '<div style="padding: 10px; color: #444; font-size: 11px;">No detached sessions found on the server.</div>';
+                    return;
+                }
+                let html = '';
+                sessions.forEach(s => {
+                    html += `
+                        <div class="session-item" style="background: #252526; margin-bottom: 5px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                            <div class="session-info">
+                                <div style="color: #ccc; font-size: 13px;">${s.title}</div>
+                                <div style="color: #666; font-size: 10px;">ID: ${s.tab_id} ${s.is_orphaned ? '(Orphaned)' : '(Active on another device)'}</div>
+                            </div>
+                            <button class="small primary" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
+                        </div>`;
+                });
+                listEl.innerHTML = html;
+            });
             const hosts = await (await fetch('/api/hosts')).json();
             const connContainer = document.getElementById(id + '_connections');
             let draggedCard = null;
@@ -519,6 +600,30 @@
             } catch (e) { console.error(e); }
         }
 
+        function reclaimBackendSession(id, tabId, title, session) {
+            const tab = tabs.find(t => t.id === id); if (!tab) return;
+            
+            // Update DOM ID to match new tab ID
+            const container = document.getElementById(id + '_instance');
+            if (container) container.id = tabId + '_instance';
+            
+            if (activeTabId === id) activeTabId = tabId;
+            tab.id = tabId; // Switch tab ID to the backend's ID
+            tab.title = title;
+            tab.state = 'terminal';
+            tab.session = { 
+                type: session.ssh_target ? 'ssh' : 'local', 
+                ssh_target: session.ssh_target, 
+                ssh_dir: session.ssh_dir, 
+                resume: session.resume 
+            };
+            
+            // Re-render tabs since we changed an ID
+            renderTabs();
+            saveTabsToStorage();
+            recreateTerminalUI(tab);
+        }
+
         async function fetchSessions(tabId, conn, targetId, forceAll = false, useCache = false) {
             const query = new URLSearchParams();
             if (conn.type === 'ssh') { query.set('ssh_target', conn.target); if (conn.dir) query.set('ssh_dir', conn.dir); }
@@ -546,7 +651,7 @@
                                 <span style="font-size: 10px; opacity: 0.7; margin-left: 10px;">(${s.meta})</span>
                             </div>
                             <div style="display: flex; gap: 5px;">
-                                <button class="small" onclick="startSession('${tabId}', '${conn.type}', '${conn.target || ''}', '${conn.dir || ''}', '${s.id}')">Resume</button>
+                                <button class="small" onclick="startSession('${tabId}', '${conn.type}', '${conn.target || ''}', '${conn.dir || ''}', '${s.id}', '${s.name.replace(/'/g, "\\'")}')">Resume</button>
                                 <button class="small danger" onclick="terminateSession('${tabId}', ${JSON.stringify(conn).replace(/"/g, '&quot;')}, '${s.id}', '${targetId}')">Terminate</button>
                             </div>
                         </div>`;
@@ -567,14 +672,15 @@
             return sessions;
         }
 
-        function startSession(tabId, type, target, dir, resumeParam = true) {
+        function startSession(tabId, type, target, dir, resumeParam = true, sessionName = null) {
             const tab = tabs.find(t => t.id === tabId); if (!tab) return;
             tab.state = 'terminal'; 
             tab.session = { type, ssh_target: target, ssh_dir: dir, resume: resumeParam }; 
-            tab.title = target ? target.split('@').pop() : 'Local';
+            tab.title = sessionName || (target ? target.split('@').pop() : 'Local');
             
             // Back button hijacking: push state so "back" has something to pop
             window.history.pushState({ terminal: true, tabId: tabId }, "");
+            saveTabsToStorage();
             
             const container = document.getElementById(tabId + '_instance'); container.innerHTML = '';
             
@@ -742,12 +848,25 @@
 
             tab.socket = io.connect(window.location.origin);
             tab.socket.on('connect', () => {
-                tab.socket.emit('restart', { tab_id: tabId, resume: tab.session.resume, cols: tab.term.cols, rows: tab.term.rows, ssh_target: target, ssh_dir: dir });
+                tab.socket.emit('restart', { 
+                    tab_id: tabId, 
+                    reclaim: true,
+                    resume: tab.session.resume, 
+                    cols: tab.term.cols, 
+                    rows: tab.term.rows, 
+                    ssh_target: target, 
+                    ssh_dir: dir 
+                });
                 setTimeout(() => { fitTerminal(tab); tab.term.focus(); }, 150);
             });
             tab.socket.on('pty-output', (data) => { 
                 if (tab.term) {
                     tab.term.write(data.output);
+                }
+            });
+            tab.socket.on('session-stolen', (data) => {
+                if (tab.term) {
+                    tab.term.write('\r\n\x1b[1;31m[Session stolen by another device]\x1b[0m\r\n');
                 }
             });
             tab.term.onData((data) => { 
@@ -823,6 +942,7 @@
             const nav = document.getElementById('nav-' + id); if (nav) nav.classList.add('active');
             const toolbarInfo = document.getElementById('active-connection-info');
             const mobileControls = document.getElementById('mobile-controls');
+            saveTabsToStorage();
 
             if (tab.state === 'terminal') {
                 toolbarInfo.style.display = 'flex';
@@ -860,6 +980,7 @@
             tabs.splice(index, 1);
             if (tabs.length === 0) addNewTab();
             else { if (activeTabId === id) switchTab(tabs[Math.max(0, index - 1)].id); renderTabs(); }
+            saveTabsToStorage();
         }
 
         function renderTabs() {
@@ -900,7 +1021,9 @@
             });
         }
 
-        addNewTab(true);
+        if (!loadTabsFromStorage()) {
+            addNewTab(true);
+        }
 
         // --- Quick Connect Logic ---
         let currentQuickTabId = null;
@@ -1029,13 +1152,33 @@
                 }
             } catch (e) { console.error("Could not load public key", e); }
         }
+
+        function copyToClipboard(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => alert("Copied to clipboard"));
+            } else {
+                // Fallback for non-secure contexts (dev environments)
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "fixed"; textArea.style.left = "-999999px"; textArea.style.top = "-999999px";
+                document.body.appendChild(textArea);
+                textArea.focus(); textArea.select();
+                try {
+                    document.execCommand('copy');
+                    alert("Copied to clipboard (fallback mode)");
+                } catch (err) {
+                    console.error('Fallback copy failed', err);
+                    alert("Copy failed. Please copy manually.");
+                }
+                document.body.removeChild(textArea);
+            }
+        }
+
         function copyPublicKey() {
-            const text = document.getElementById('public-key-text').innerText;
-            navigator.clipboard.writeText(text).then(() => alert("Public key copied to clipboard"));
+            copyToClipboard(document.getElementById('public-key-text').innerText);
         }
         function copyInstanceSnippet() {
-            const text = document.getElementById('instance-key-snippet').innerText;
-            navigator.clipboard.writeText(text).then(() => alert("Snippet copied to clipboard"));
+            copyToClipboard(document.getElementById('instance-key-snippet').innerText);
         }
         async function rotateInstanceKey() {
             if (!confirm("Are you sure you want to rotate the instance key? All remote hosts using the current key will lose access until updated with the new one.")) return;
