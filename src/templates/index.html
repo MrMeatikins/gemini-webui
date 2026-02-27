@@ -12,24 +12,22 @@
             margin: 0; 
             padding: 0; 
             background-color: #000; 
-            overflow: hidden; 
+            overflow-x: hidden; 
+            overflow-y: auto;
             height: 100%; 
             width: 100%; 
-            overscroll-behavior: auto;
+            overscroll-behavior-y: auto;
             -webkit-overflow-scrolling: touch;
         }
         body { 
             display: flex; 
             flex-direction: column; 
-            height: 100vh; 
-            height: 100dvh; 
+            min-height: 100vh; 
+            min-height: 100dvh; 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            position: fixed;
-            top: 0;
-            left: 0;
         }
-        #toolbar { background-color: #333; padding: 10px; display: flex; gap: 10px; align-items: center; }
-        #tab-bar { background-color: #222; display: flex; overflow-x: auto; padding: 0 5px; }
+        #toolbar { background-color: #333; padding: 10px; display: flex; gap: 10px; align-items: center; touch-action: pan-y; }
+        #tab-bar { background-color: #222; display: flex; overflow-x: auto; padding: 0 5px; touch-action: pan-x pan-y; }
         .tab { 
             padding: 8px 15px; 
             background-color: #333; 
@@ -94,7 +92,7 @@
             /* Mobile Controls */
             #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
             #active-connection-info { gap: 5px; }
-            body { height: 100vh; height: 100dvh; height: -webkit-fill-available; position: fixed; top: 0; left: 0; width: 100%; }
+            body { min-height: 100vh; min-height: 100dvh; height: -webkit-fill-available; width: 100%; }
         }
         
         /* Quick Connect Bar */
@@ -138,7 +136,7 @@
             touch-action: pan-y;
         }
         
-        .launcher { padding: 30px; color: #ccc; overflow-y: auto; height: 100%; max-width: 900px; margin: 0 auto; overscroll-behavior: contain; touch-action: pan-y;}
+        .launcher { padding: 30px; color: #ccc; overflow-y: auto; height: 100%; max-width: 900px; margin: 0 auto; overscroll-behavior: auto; touch-action: pan-y;}
         .launcher h2 { color: white; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; font-weight: 500;}
         .connection-card { background: #252526; border-radius: 6px; padding: 15px; margin-bottom: 15px; border: 1px solid #333; transition: opacity 0.2s, transform 0.2s; }
         .connection-card:hover { border-color: #444; }
