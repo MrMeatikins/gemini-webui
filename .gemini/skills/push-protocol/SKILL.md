@@ -18,9 +18,12 @@ The custom alias `git p` is mandatory for all pushes. It performs two critical f
 2.  **Deployment Monitoring**: Automatically executes `./jenkins/wait-for-receipt.sh` to block until the Jenkins deployment is complete and verified.
 
 > [!CAUTION]
-> **CONTEXT LOSS WARNING**: Because this repository uses zero-downtime deployments that restart the server, your current conversation context with the Gemini CLI may be lost during the reset. 
+> **DEPLOYMENT VISIBILITY WARNING**: Because `git p` triggers a zero-downtime deployment that restarts the server, you will lose the response context of the `git p` command itself. You will not see its output or confirmation in the current turn.
 > 
-> **MANDATORY**: Before executing `git p`, you MUST explicitly state as your FINAL message: 
+> **MANDATORY WORKFLOW**: 
+> 1. Stage and commit your changes in one turn (`git add ... && git commit -m "..."`).
+> 2. Execute `git p` as a separate, final turn.
+> 3. Before executing `git p`, you MUST explicitly state as your FINAL message: 
 > "When I run `git p` I may lose context of this transaction due to Gemini WebUI restart."
 
 
