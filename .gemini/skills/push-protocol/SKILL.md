@@ -20,8 +20,8 @@ The custom alias `git p` is mandatory for all pushes. It performs two critical f
 > [!CAUTION]
 > **CONTEXT LOSS WARNING**: Because this repository uses zero-downtime deployments that restart the server, your current conversation context with the Gemini CLI may be lost during the reset. 
 > 
-> **MANDATORY**: Before executing `git p`, you MUST explicitly state: 
-> "I acknowledge I may lose context of this transaction when the system resets."
+> **MANDATORY**: Before executing `git p`, you MUST explicitly state as your FINAL message: 
+> "When I run `git p` I may lose context of this transaction due to Gemini WebUI restart."
 
 
 ## ✅ Verification
