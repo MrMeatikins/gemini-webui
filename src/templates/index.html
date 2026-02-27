@@ -259,8 +259,8 @@
         <div class="control-btn" onclick="sendToTerminal('\x1b[B')">▼</div>
     </div>
 
-    <div id="settings-modal" style="display:none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7);">
-        <div style="background-color: #333; color: white; margin: 5% auto; padding: 25px; border: 1px solid #444; width: 60%; max-height: 85vh; overflow-y: auto; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
             <span onclick="closeSettings()" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer; opacity: 0.7;">&times;</span>
             <h2 style="margin-top: 0;">Settings</h2>
             <div style="margin-top: 20px;">
@@ -494,16 +494,17 @@
                         return;
                     }
                     let html = '';
-                    sessions.forEach(s => {
-                        html += `
-                            <div class="session-item" style="background: #252526; margin-bottom: 5px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                <div class="session-info">
-                                    <div style="color: #ccc; font-size: 13px;">${s.title}</div>
-                                    <div style="color: #666; font-size: 10px;">ID: ${s.tab_id} ${s.is_orphaned ? '(Orphaned)' : '(Active on another device)'}</div>
-                                </div>
-                                <button class="small primary" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
-                            </div>`;
-                    });
+                                        sessions.forEach(s => {
+                                            html += `
+                                                <div class="session-item" style="background: #252526; margin-bottom: 5px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                                                    <div class="session-info">
+                                                        <div style="color: #3b8eea; font-weight: bold; font-size: 13px;">${s.title}</div>
+                                                        <div style="color: #888; font-size: 10px;">${s.is_orphaned ? 'Orphaned' : 'Active'} • Last active: ${new Date(s.last_active * 1000).toLocaleTimeString()}</div>
+                                                    </div>
+                                                    <button class="small primary" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
+                                                </div>`;
+                                        });
+                    
                     listEl.innerHTML = html;
                 }).catch(e => console.error("Session fetch failed", e));
             };
