@@ -693,6 +693,30 @@ def list_active_sessions():
     user_id = session.get('user_id') or ('admin' if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true' else None)
     return jsonify(session_manager.list_sessions(user_id))
 
+@app.route('/api/management/sessions/terminate', methods=['POST'])
+@authenticated_only
+def terminate_managed_session():
+    """Terminate a backend managed session and kill its process."""
+    data = request.json
+    tab_id = data.get('tab_id')
+    user_id = session.get('user_id') or ('admin' if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true' else None)
+    
+    if not tab_id:
+        return jsonify({"error": "Tab ID required"}), 400
+        
+    session_obj = session_manager.remove_session(tab_id, user_id)
+    if session_obj:
+        logger.info(f"Terminating managed session {tab_id}")
+        try:
+            os.kill(session_obj.pid, signal.SIGKILL)
+            os.waitpid(session_obj.pid, 0)
+        except Exception as e:
+            logger.error(f"Error killing process {session_obj.pid}: {e}")
+            
+        return jsonify({"status": "success"})
+    
+    return jsonify({"error": "Session not found"}), 404
+
 @app.route('/api/sessions', methods=['GET'])
 @authenticated_only
 def list_gemini_sessions():
