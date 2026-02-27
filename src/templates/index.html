@@ -609,6 +609,7 @@
                                 </div>
                                 <div style="display: flex; gap: 8px;">
                                     <button class="small primary" style="padding: 6px 12px;" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
+                                    <button class="small danger" style="padding: 6px 12px;" onclick="terminateBackendSession('${id}', '${s.tab_id}')">Terminate</button>
                                 </div>
                             </div>`;
                     });
@@ -770,6 +771,24 @@
             } catch (e) { console.error(e); }
         }
 
+        async function terminateBackendSession(launcherTabId, tabId) {
+            if (!confirm(`Are you sure you want to terminate this backend session? Any unsaved work in the terminal will be lost.`)) return;
+            try {
+                const response = await fetch('/api/management/sessions/terminate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tab_id: tabId })
+                });
+                if (response.ok) {
+                    // Trigger a refresh of the launcher that called this
+                    renderLauncher(launcherTabId);
+                } else {
+                    const data = await response.json();
+                    alert("Termination failed: " + (data.error || "Unknown error"));
+                }
+            } catch (e) { console.error(e); }
+        }
+
         function reclaimBackendSession(id, tabId, title, session) {
             const tab = tabs.find(t => t.id === id); if (!tab) return;
             
@@ -822,7 +841,6 @@
                             </div>
                             <div style="display: flex; gap: 5px;">
                                 <button class="small" onclick="startSession('${tabId}', '${conn.type}', '${conn.target || ''}', '${conn.dir || ''}', '${s.id}', '${s.name.replace(/'/g, "\\'")}')">Resume</button>
-                                <button class="small danger" onclick="terminateSession('${tabId}', ${JSON.stringify(conn).replace(/"/g, '&quot;')}, '${s.id}', '${targetId}')">Terminate</button>
                             </div>
                         </div>`;
                     });
@@ -1060,6 +1078,14 @@
 
             tab.socket.on('reconnect_error', (error) => {
                 console.log('Reconnection error:', error);
+                // If we get a 502 (Bad Gateway), it means the server is restarting/down
+                // We should probably just reload the page to get a clean state
+                if (error && (error.message === "xhr poll error" || error.description === 502)) {
+                    console.log("502 or Poll error detected, checking for reload...");
+                    if (disconnectTime && (Date.now() - disconnectTime > 5000)) {
+                        location.reload();
+                    }
+                }
             });
 
             tab.socket.on('reconnect_failed', () => {
