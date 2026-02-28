@@ -95,6 +95,13 @@
         .terminal-instance { width: 100%; height: 100%; padding: 5px; box-sizing: border-box; direction: ltr !important; position: relative;}
         .xterm-link { text-decoration: underline !important; cursor: pointer !important; }
         
+        /* Enable text selection on mobile for xterm.js */
+        .xterm .xterm-viewport, .xterm .xterm-screen {
+            -webkit-user-select: auto !important;
+            user-select: auto !important;
+            touch-action: pan-y auto !important;
+        }
+        
         /* Absolute Proxy Momentum Strategy */
         .mobile-scroll-proxy {
             position: absolute;
@@ -902,24 +909,42 @@
                     isSyncing = false;
                 }, {passive: true});
 
-                // Tap-through logic: Only disable when a clear tap is detected
-                let startX, startY;
-                proxy.addEventListener('touchstart', (e) => {
-                    startX = e.touches[0].clientX;
-                    startY = e.touches[0].clientY;
-                }, {passive: true});
-
-                proxy.addEventListener('touchend', (e) => {
-                    const deltaX = Math.abs(e.changedTouches[0].clientX - startX);
-                    const deltaY = Math.abs(e.changedTouches[0].clientY - startY);
-                    
-                    if (deltaX < 10 && deltaY < 10) {
-                        // This was a tap. Briefly open the portal.
-                        proxy.style.pointerEvents = 'none';
-                        setTimeout(() => proxy.style.pointerEvents = 'all', 100);
-                    }
-                }, {passive: true});
-
+                                // Tap-through logic: Only disable when a clear tap or long-press is detected
+                                let startX, startY;
+                                let touchTimeout;
+                                proxy.addEventListener('touchstart', (e) => {
+                                    startX = e.touches[0].clientX;
+                                    startY = e.touches[0].clientY;
+                                    
+                                    // Allow long press to pass through to xterm for text selection
+                                    touchTimeout = setTimeout(() => {
+                                        proxy.style.pointerEvents = 'none';
+                                    }, 400); // 400ms for long press
+                                }, {passive: true});
+                
+                                proxy.addEventListener('touchmove', (e) => {
+                                    const deltaY = Math.abs(e.touches[0].clientY - startY);
+                                    const deltaX = Math.abs(e.touches[0].clientX - startX);
+                                    if (deltaY > 10 || deltaX > 10) {
+                                        clearTimeout(touchTimeout); // It's a scroll, don't pass through
+                                    }
+                                }, {passive: true});
+                
+                                proxy.addEventListener('touchend', (e) => {
+                                    clearTimeout(touchTimeout);
+                                    const deltaX = Math.abs(e.changedTouches[0].clientX - startX);
+                                    const deltaY = Math.abs(e.changedTouches[0].clientY - startY);
+                
+                                    if (deltaX < 10 && deltaY < 10) {
+                                        // This was a tap. Briefly open the portal.
+                                        proxy.style.pointerEvents = 'none';
+                                        setTimeout(() => proxy.style.pointerEvents = 'all', 100);
+                                    } else {
+                                        // If we disabled pointer events due to long press but then lifted, we restore it
+                                        // xterm handles selection ending itself. We just need proxy back to normal for scrolling.
+                                        proxy.style.pointerEvents = 'all';
+                                    }
+                                }, {passive: true});
                 // Set initial position
                 proxy.scrollTop = 50000;
             }
