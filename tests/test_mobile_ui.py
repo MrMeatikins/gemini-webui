@@ -23,3 +23,22 @@ def mobile_page(server):
 def test_mobile_ui_exists(mobile_page):
     """Verify that mobile UI is functional."""
     mobile_page.wait_for_selector("#tab-bar", timeout=5000)
+
+@pytest.mark.timeout(20)
+def test_mobile_controls_buttons(mobile_page):
+    """Verify that all mobile control buttons exist."""
+    # 1. Start a local session
+    # The first "Start New" button is for the 'local' connection
+    mobile_page.click("text=Start New")
+    mobile_page.wait_for_selector(".terminal-instance", timeout=10000)
+    
+    # 2. Check mobile controls visibility
+    # Wait for the mobile controls to be visible
+    mobile_page.wait_for_selector("#mobile-controls", state="visible", timeout=5000)
+    
+    # 3. Check for specific buttons
+    expected_buttons = ["Esc", "Tab", "Ctrl", "Alt", "▲", "▼", "◀", "▶", "A+", "A-"]
+    for btn_text in expected_buttons:
+        # We use filter(has_text=...) to be more precise
+        btn = mobile_page.locator("#mobile-controls .control-btn").filter(has_text=btn_text)
+        expect(btn.first).to_be_visible()

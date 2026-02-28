@@ -226,14 +226,15 @@
                     display: none;
                     background: #333;
                     padding: 5px;
-                    grid-template-columns: repeat(7, 1fr);
+                    grid-template-columns: repeat(5, 1fr);
                     gap: 5px;
                     border-top: 1px solid #444;
                     flex-shrink: 0;
                     touch-action: none;
                     overscroll-behavior: none;
                     padding-bottom: env(safe-area-inset-bottom);
-                }        .control-btn { 
+                }
+        .control-btn { 
             background: #444; 
             color: white; 
             border: 1px solid #555; 
@@ -300,13 +301,16 @@
     <div id="tab-bar"></div>
     <div id="terminal-container"></div>
     <div id="mobile-controls" style="display: none;">
-        <div id="ctrl-toggle" class="control-btn" onclick="toggleCtrl()">Ctrl</div>
+        <div class="control-btn" onclick="sendToTerminal('\t')">Tab</div>
         <div class="control-btn" onclick="adjustFontSize(1)">A+</div>
         <div class="control-btn" onclick="adjustFontSize(-1)">A-</div>
-        <div class="control-btn" onclick="sendToTerminal('\x1b[D')">◀</div>
-        <div class="control-btn" onclick="sendToTerminal('\x1b[C')">▶</div>
         <div class="control-btn" onclick="sendToTerminal('\x1b[A')">▲</div>
+        <div class="control-btn" onclick="sendToTerminal('\x1b')">Esc</div>
+        <div id="ctrl-toggle" class="control-btn" onclick="toggleCtrl()">Ctrl</div>
+        <div id="alt-toggle" class="control-btn" onclick="toggleAlt()">Alt</div>
+        <div class="control-btn" onclick="sendToTerminal('\x1b[D')">◀</div>
         <div class="control-btn" onclick="sendToTerminal('\x1b[B')">▼</div>
+        <div class="control-btn" onclick="sendToTerminal('\x1b[C')">▶</div>
     </div>
 
     <div id="settings-modal" class="modal">
@@ -414,6 +418,7 @@
         let activeTabId = null;
         let initialAutoResumeDone = false;
         let ctrlActive = false;
+        let altActive = false;
         let launcherRefreshInterval = null;
         let titleFlashInterval = null;
         let originalPageTitle = 'Gemini WebUI';
@@ -466,7 +471,7 @@
                         container.id = tab.id + '_instance'; container.className = 'tab-instance';
                         document.getElementById('terminal-container').appendChild(container);
                         if (tab.state === 'terminal') {
-                            recreateTerminalUI(tab);
+                            recreateTerminalUI(tab, true);
                         } else {
                             renderLauncher(tab.id);
                         }
@@ -481,14 +486,14 @@
             return false;
         }
 
-        function recreateTerminalUI(tab) {
+        function recreateTerminalUI(tab, shouldReclaim = false) {
             const container = document.getElementById(tab.id + '_instance');
             container.innerHTML = '';
             const termDiv = document.createElement('div');
             termDiv.className = 'terminal-instance';
             termDiv.id = 'rolling-log-' + tab.id;
             container.appendChild(termDiv);
-            startSession(tab.id, tab.session.type, tab.session.ssh_target, tab.session.ssh_dir, tab.session.resume, tab.title);
+            startSession(tab.id, tab.session.type, tab.session.ssh_target, tab.session.ssh_dir, tab.session.resume, tab.title, shouldReclaim);
         }
 
         const isMobile = window.innerWidth <= 1080 || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -804,7 +809,7 @@
             // Re-render tabs since we changed an ID
             renderTabs();
             saveTabsToStorage();
-            recreateTerminalUI(tab);
+            recreateTerminalUI(tab, true);
         }
 
         async function fetchSessions(tabId, conn, targetId, forceAll = false, useCache = false) {
@@ -854,11 +859,12 @@
             return sessions;
         }
 
-        function startSession(tabId, type, target, dir, resumeParam = true, sessionName = null) {
+        function startSession(tabId, type, target, dir, resumeParam = true, sessionName = null, shouldReclaim = false) {
             const tab = tabs.find(t => t.id === tabId); if (!tab) return;
             tab.state = 'terminal'; 
             tab.session = { type, ssh_target: target, ssh_dir: dir, resume: resumeParam }; 
             tab.title = sessionName || (target ? target.split('@').pop() : 'Local');
+            tab.shouldReclaim = shouldReclaim;
             
             // Back button hijacking: push state so "back" has something to pop
             window.history.pushState({ terminal: true, tabId: tabId }, "");
@@ -1077,10 +1083,10 @@
                     return;
                 }
                 disconnectTime = null;
-                tab.term.write('\r\n\x1b[1;32m[Connected to server]\x1b[0m\r\n');
+                tab.term.write('\r\n\x1b[2m[Connected to server]\x1b[0m\r\n');
                 tab.socket.emit('restart', { 
                     tab_id: tabId, 
-                    reclaim: true,
+                    reclaim: tab.shouldReclaim,
                     sid: tab.socket.id,
                     resume: tab.session.resume, 
                     cols: tab.term.cols, 
@@ -1088,6 +1094,7 @@
                     ssh_target: target, 
                     ssh_dir: dir 
                 });
+                tab.shouldReclaim = true; // All subsequent reconnects should attempt reclaim
                 setTimeout(() => { fitTerminal(tab); tab.term.focus(); }, 150);
             });
 
@@ -1132,19 +1139,21 @@
             });
             tab.term.onData((data) => { 
                 if (tab.socket) {
+                    let input = data;
                     if (ctrlActive && data.length === 1) {
                         const code = data.charCodeAt(0);
                         if (code >= 97 && code <= 122) { // a-z
-                            tab.socket.emit('pty-input', {input: String.fromCharCode(code - 96)});
+                            input = String.fromCharCode(code - 96);
                         } else if (code >= 65 && code <= 90) { // A-Z
-                            tab.socket.emit('pty-input', {input: String.fromCharCode(code - 64)});
-                        } else {
-                            tab.socket.emit('pty-input', {input: data});
+                            input = String.fromCharCode(code - 64);
                         }
                         toggleCtrl(false);
-                    } else {
-                        tab.socket.emit('pty-input', {input: data});
                     }
+                    if (altActive && data.length === 1) {
+                        input = '\x1b' + input;
+                        toggleAlt(false);
+                    }
+                    tab.socket.emit('pty-input', {input});
                 }
             });
             tab.term.onTitleChange((title) => {
@@ -1189,6 +1198,17 @@
             const btn = document.getElementById('ctrl-toggle');
             if (ctrlActive) btn.classList.add('active');
             else btn.classList.remove('active');
+            const tab = tabs.find(t => t.id === activeTabId);
+            if (tab && tab.term) tab.term.focus();
+        }
+
+        function toggleAlt(force) {
+            altActive = force !== undefined ? force : !altActive;
+            const btn = document.getElementById('alt-toggle');
+            if (btn) {
+                if (altActive) btn.classList.add('active');
+                else btn.classList.remove('active');
+            }
             const tab = tabs.find(t => t.id === activeTabId);
             if (tab && tab.term) tab.term.focus();
         }

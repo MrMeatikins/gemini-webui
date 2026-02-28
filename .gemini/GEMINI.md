@@ -78,6 +78,8 @@ The project uses **Pytest** and **Playwright**.
 *Note: The tests use a mock Gemini binary located in `tests/mock/gemini` to verify terminal flow without consuming real API tokens.*
 
 **Testing Mandates:**
+- **Feedback Loop**: Every request must have a realtime feedback loop. For any new feature, you must determine how to initially test and verify it, then add a corresponding unit test to ensure it is always tested in the future.
+- **Test-Driven Reliability**: Tests are the only quality guarantee. If a test doesn't exist, the feature will inevitably break. Every feature (e.g., highlighting text on mobile) MUST have a unit test. Style changes are arbitrary, but functional features are not.
 - **Performance**: Individual tests must NEVER take longer than 10 seconds.
 - **Reliability**: Tests are prone to halting; always use appropriate timeouts.
 - **Safety**: NEVER DISABLE TIMEOUTS.

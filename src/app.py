@@ -33,7 +33,7 @@ except ImportError:
 
 # Global config holder and defaults
 config = {}
-GEMINI_BIN = os.environ.get('GEMINI_BIN', '/usr/local/bin/gemini')
+GEMINI_BIN = os.environ.get('GEMINI_BIN', 'gemini')
 ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
 ADMIN_PASS = os.environ.get('ADMIN_PASS', 'admin')
 LDAP_SERVER = os.environ.get('LDAP_SERVER')
@@ -545,7 +545,7 @@ def pty_restart(data):
             return
         else:
             logger.warning(f"Reclaim failed for session {tab_id}. Creating a fresh session.")
-            socketio.emit('pty-output', {'output': '\r\n\x1b[1;33m[Session not found on server. Starting fresh...]\x1b[0m\r\n'}, room=sid)
+            socketio.emit('pty-output', {'output': '\r\n\x1b[2m[Session not found on server. Starting fresh...]\x1b[0m\r\n'}, room=sid)
 
     # LRU EVICTION POLICY: Limit to 10 total active sessions
     if len(session_manager.sessions) >= 10 and tab_id not in session_manager.sessions:
@@ -564,8 +564,8 @@ def pty_restart(data):
             # Inform the client that their session was evicted if they are still connected
             sid_to_notify = session_manager.tabid_to_sid.get(oldest_session.tab_id)
             if sid_to_notify:
-                socketio.emit('pty-output', {'output': '\r\n\033[1;33mWarning: This session was evicted to make room for a new one.\033[0m\r\n'}, room=sid_to_notify)
-                
+                socketio.emit('pty-output', {'output': '\r\n\x1b[2m[Warning: This session was evicted to make room for a new one.]\x1b[0m\r\n'}, room=sid_to_notify)
+
             session_manager.remove_session(oldest_session.tab_id)
             try:
                 os.kill(oldest_session.pid, signal.SIGKILL)
@@ -672,7 +672,7 @@ def pty_restart(data):
         
         try: set_winsize(fd, rows, cols)
         except Exception: pass
-        socketio.emit('pty-output', {'output': '\r\nLoading Context...\r\n'}, room=sid)
+        socketio.emit('pty-output', {'output': '\x1b[2mLoading Context...\x1b[0m\r\n'}, room=sid)
 
 @app.route('/')
 def index():
