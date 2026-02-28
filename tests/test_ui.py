@@ -122,7 +122,7 @@ def test_fresh_session_no_reclaim_warning(page, server):
     }""")
     
     assert "Session not found on server" not in content
-    assert "Connected to server" in content
+    assert "Loading Context" in content
 
 @pytest.mark.prone_to_timeout
 @pytest.mark.timeout(20)

@@ -129,4 +129,4 @@ def test_pty_restart_lru_eviction(mock_socketio, mock_pty):
             assert len(session_manager.sessions) == 10
             
             # Verify notification was sent to evicted tab's SID (sid_0)
-            mock_socketio.emit.assert_any_call('pty-output', {'output': '\r\n\033[1;33mWarning: This session was evicted to make room for a new one.\033[0m\r\n'}, room='sid_0')
+            mock_socketio.emit.assert_any_call('pty-output', {'output': '\r\n\x1b[2m[Warning: This session was evicted to make room for a new one.]\x1b[0m\r\n'}, room='sid_0')

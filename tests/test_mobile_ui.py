@@ -36,9 +36,12 @@ def test_mobile_controls_buttons(mobile_page):
     # Wait for the mobile controls to be visible
     mobile_page.wait_for_selector("#mobile-controls", state="visible", timeout=5000)
     
+    # Debug: Print the innerHTML of the controls
+    html = mobile_page.locator("#mobile-controls").inner_html()
+    print("DEBUG HTML:", html)
+    
     # 3. Check for specific buttons
     expected_buttons = ["Esc", "Tab", "Ctrl", "Alt", "▲", "▼", "◀", "▶", "A+", "A-"]
     for btn_text in expected_buttons:
-        # We use filter(has_text=...) to be more precise
-        btn = mobile_page.locator("#mobile-controls .control-btn").filter(has_text=btn_text)
+        btn = mobile_page.locator("#mobile-controls .control-btn").get_by_text(btn_text, exact=True)
         expect(btn.first).to_be_visible()
