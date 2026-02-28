@@ -96,10 +96,18 @@
         .xterm-link { text-decoration: underline !important; cursor: pointer !important; }
         
         /* Enable text selection on mobile for xterm.js */
-        .xterm .xterm-viewport, .xterm .xterm-screen {
+        .xterm .xterm-viewport {
+            pointer-events: none !important; /* Let touches pass through to screen */
+        }
+        .xterm .xterm-screen {
             -webkit-user-select: auto !important;
             user-select: auto !important;
             touch-action: pan-y auto !important;
+            pointer-events: auto !important; /* Catch touches for selection and custom scrolling */
+        }
+        .xterm .xterm-rows, .xterm .xterm-rows > div, .xterm .xterm-rows > div > span {
+            -webkit-user-select: auto !important;
+            user-select: auto !important;
         }
         
         /* Quick Connect Bar */
@@ -863,6 +871,81 @@
             tab.fitAddon = new FitAddon.FitAddon(); tab.term.loadAddon(tab.fitAddon);
             
             tab.term.open(termDiv);
+
+            if (isMobile) {
+                let lastTouchY = 0;
+                termDiv.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 1) lastTouchY = e.touches[0].clientY;
+                }, { passive: true });
+                
+                termDiv.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 1) {
+                        const currentY = e.touches[0].clientY;
+                        const deltaY = lastTouchY - currentY;
+                        // Scroll roughly 1 line per 15 pixels dragged
+                        if (Math.abs(deltaY) > 15) {
+                            const lines = Math.sign(deltaY) * Math.floor(Math.abs(deltaY) / 15);
+                            tab.term.scrollLines(lines);
+                            lastTouchY = currentY;
+                        }
+                    }
+                }, { passive: true });
+            }
+
+            // Floating Copy Button for Mobile
+            if (isMobile) {
+                let copyBtn = document.getElementById('mobile-copy-btn');
+                if (!copyBtn) {
+                    copyBtn = document.createElement('button');
+                    copyBtn.id = 'mobile-copy-btn';
+                    copyBtn.innerHTML = '📋 Copy';
+                    copyBtn.style.position = 'absolute';
+                    copyBtn.style.display = 'none';
+                    copyBtn.style.zIndex = '1000';
+                    copyBtn.style.padding = '8px 12px';
+                    copyBtn.style.background = '#2472c8';
+                    copyBtn.style.color = '#fff';
+                    copyBtn.style.border = '1px solid #3b8eea';
+                    copyBtn.style.borderRadius = '5px';
+                    copyBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.5)';
+                    copyBtn.style.fontSize = '14px';
+                    copyBtn.style.pointerEvents = 'auto';
+                    document.body.appendChild(copyBtn);
+
+                    copyBtn.addEventListener('click', () => {
+                        const activeTab = tabs.find(t => t.id === activeTabId);
+                        if (activeTab && activeTab.term) {
+                            const text = activeTab.term.getSelection();
+                            if (text) {
+                                navigator.clipboard.writeText(text).then(() => {
+                                    const originalText = copyBtn.innerHTML;
+                                    copyBtn.innerHTML = '✅ Copied!';
+                                    setTimeout(() => {
+                                        copyBtn.innerHTML = originalText;
+                                        copyBtn.style.display = 'none';
+                                        activeTab.term.clearSelection();
+                                    }, 1000);
+                                });
+                            }
+                        }
+                    });
+                }
+
+                tab.term.onSelectionChange(() => {
+                    if (tab.id !== activeTabId) return;
+                    const text = tab.term.getSelection();
+                    if (text && text.length > 0) {
+                        // Position button near the bottom right of the terminal or top right
+                        copyBtn.style.bottom = '80px';
+                        copyBtn.style.right = '20px';
+                        copyBtn.style.top = 'auto';
+                        copyBtn.style.left = 'auto';
+                        copyBtn.style.display = 'block';
+                    } else {
+                        copyBtn.style.display = 'none';
+                    }
+                });
+            }
 
             // Improved Web Links support with wrapped line handling
             try {
