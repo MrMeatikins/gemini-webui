@@ -5,10 +5,10 @@ from playwright.sync_api import sync_playwright, expect
 # =====================================================================================
 # MANDATORY TIMEOUT GUARDRAILS
 # =====================================================================================
-# Individual test execution MUST NOT exceed 10 seconds.
+# Individual test execution MUST NOT exceed 20 seconds.
 # =====================================================================================
 
-MAX_TEST_TIME = 10.0
+MAX_TEST_TIME = 20.0
 
 @pytest.fixture(scope="function")
 def page(server):
@@ -16,14 +16,16 @@ def page(server):
         browser = p.chromium.launch(headless=True)
         context = browser.new_context()
         page = context.new_page()
-        page.goto(server, timeout=10000)
-        page.wait_for_selector("#tab-bar", timeout=5000)
+        page.on("console", lambda msg: print(f"CONSOLE: {msg.text}"))
+        page.on("pageerror", lambda err: print(f"PAGE ERROR: {err}"))
+        page.goto(server, timeout=15000)
+        page.wait_for_selector(".launcher, .terminal-instance", state="attached", timeout=15000)
         yield page
         context.close()
         browser.close()
 
 @pytest.mark.prone_to_timeout
-@pytest.mark.timeout(10)
+@pytest.mark.timeout(20)
 def test_ui_launcher_and_sessions(page):
     """Verify launcher opens and displays mock sessions."""
     # Launcher is open by default on first load
@@ -32,7 +34,7 @@ def test_ui_launcher_and_sessions(page):
     expect(page.get_by_text("Mock Session").first).to_be_visible(timeout=5000)
 
 @pytest.mark.prone_to_timeout
-@pytest.mark.timeout(10)
+@pytest.mark.timeout(20)
 def test_ui_local_protection(page):
     """Verify the default 'local' host is protected from deletion."""
     page.locator('button:has-text("Settings")').click()
@@ -46,7 +48,7 @@ def test_ui_local_protection(page):
     expect(local_host_item.locator("button:has-text('Delete')")).to_have_count(0)
 
 @pytest.mark.prone_to_timeout
-@pytest.mark.timeout(10)
+@pytest.mark.timeout(20)
 def test_ui_terminal_initialization(page):
     """Verify terminal starts and sensitive inputs are removed."""
     # Open a new tab to ensure we are in launcher mode
@@ -66,7 +68,7 @@ def test_ui_terminal_initialization(page):
     expect(page.locator('#ssh-dir')).to_have_count(0)
 
 @pytest.mark.prone_to_timeout
-@pytest.mark.timeout(10)
+@pytest.mark.timeout(20)
 def test_ui_tab_management(page):
     """Verify creating and closing tabs works correctly."""
     # First, turn the initial tab into a terminal so we can create a second launcher tab

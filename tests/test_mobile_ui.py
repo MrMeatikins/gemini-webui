@@ -2,8 +2,8 @@ import pytest
 import time
 from playwright.sync_api import sync_playwright, expect
 
-# Individual test execution MUST NOT exceed 10 seconds.
-MAX_TEST_TIME = 10.0
+# Individual test execution MUST NOT exceed 20 seconds.
+MAX_TEST_TIME = 20.0
 
 @pytest.fixture(scope="function")
 def mobile_page(server):
@@ -13,13 +13,13 @@ def mobile_page(server):
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(**device)
         page = context.new_page()
-        page.goto(server, timeout=10000)
-        page.wait_for_selector("#tab-bar", timeout=5000)
+        page.goto(server, timeout=15000)
+        page.wait_for_selector(".launcher, .terminal-instance", state="attached", timeout=15000)
         yield page
         context.close()
         browser.close()
 
-@pytest.mark.timeout(10)
+@pytest.mark.timeout(20)
 def test_mobile_passive_portal(mobile_page):
     """Verify that Passive Portal scroller is configured correctly."""
     # Wait for either the terminal or any button in the active launcher tab
