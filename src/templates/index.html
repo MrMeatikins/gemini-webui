@@ -277,16 +277,14 @@
             scrollbar-color: #444 #1e1e1e;
         }
 
-        @media (max-width: 1200px) {
-            .mobile-scroll-proxy { display: block; }
-            .xterm-viewport { display: none !important; }
-            .modal-content { width: 98% !important; margin: 10px auto !important; padding: 10px !important; }
-            
-            /* Mobile Controls */
-            #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
-            #active-connection-info { gap: 5px; }
-            body { height: 100%; width: 100%; position: absolute; }
-        }
+        .is-mobile .mobile-scroll-proxy { display: block; }
+        .is-mobile .xterm-viewport { display: none !important; }
+        .is-mobile .modal-content { width: 98% !important; margin: 10px auto !important; padding: 10px !important; }
+        
+        /* Mobile Controls */
+        .is-mobile #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
+        .is-mobile #active-connection-info { gap: 5px; }
+        .is-mobile body { height: 100%; width: 100%; position: absolute; }
     </style>
 </head>
 <body>
@@ -497,14 +495,12 @@
         }
 
         const isMobile = window.innerWidth <= 1080 || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        if (isMobile) {
+            document.documentElement.classList.add('is-mobile');
+        }
         console.log("Environment detection: isMobile =", isMobile);
         
-        if (isMobile && window.visualViewport) {
-            window.visualViewport.addEventListener('resize', () => {
-                document.body.style.height = window.visualViewport.height + 'px';
-            });
-            document.body.style.height = window.visualViewport.height + 'px';
-        }
+        // VisualViewport logic is handled at the bottom of the script
 
         window.addEventListener('popstate', (event) => {
             const activeTab = tabs.find(t => t.id === activeTabId);
@@ -880,7 +876,6 @@
             termDiv.setAttribute('aria-relevant', 'additions');
             container.appendChild(termDiv);
             
-            const isMobile = window.innerWidth <= 1080;
             const fontSize = isMobile ? 10 : 14;
 
             tab.term = new Terminal({ 
@@ -1259,7 +1254,7 @@
 
             if (tab.state === 'terminal') {
                 toolbarInfo.style.display = 'flex';
-                if (window.innerWidth <= 1080) mobileControls.style.display = 'grid';
+                if (isMobile) mobileControls.style.display = 'grid';
                 updateStatus(tab.session.ssh_target, tab.session.ssh_dir);
                 setTimeout(() => { fitTerminal(tab); tab.term.focus(); }, 50);
             } else { 
@@ -1314,24 +1309,31 @@
         if (window.visualViewport) {
             let resizeTimeout;
             let lastViewHeight = window.visualViewport.height;
+            
+            const updateViewport = () => {
+                const viewHeight = window.visualViewport.height;
+                // Ignore tiny jitters (less than 20px) to prevent scroll interruption
+                if (Math.abs(viewHeight - lastViewHeight) < 20) return;
+                lastViewHeight = viewHeight;
+
+                // Set body height to EXACTLY the visual viewport height so things like the toolbar stay nailed to the bottom.
+                document.body.style.height = viewHeight + 'px';
+                
+                // Clear any padding that might have been added previously
+                document.body.style.paddingBottom = '0px';
+                
+                // Ensure we are scrolled to the top of the new visual viewport
+                window.scrollTo(0, 0);
+                tabs.forEach(tab => fitTerminal(tab));
+            };
+
             window.visualViewport.addEventListener('resize', () => {
                 clearTimeout(resizeTimeout);
-                resizeTimeout = setTimeout(() => {
-                    const viewHeight = window.visualViewport.height;
-                    // Ignore tiny jitters (less than 20px) to prevent scroll interruption
-                    if (Math.abs(viewHeight - lastViewHeight) < 20) return;
-                    lastViewHeight = viewHeight;
-
-                    const totalHeight = window.innerHeight;
-                    const keyboardHeight = totalHeight - viewHeight;
-                    
-                    // Pin to visible area by adding padding to the bottom
-                    document.body.style.paddingBottom = Math.max(0, keyboardHeight) + 'px';
-                    
-                    window.scrollTo(0, 0);
-                    tabs.forEach(tab => fitTerminal(tab));
-                }, 100);
+                resizeTimeout = setTimeout(updateViewport, 100);
             });
+            
+            // Set initial state
+            updateViewport();
         }
 
         if (!loadTabsFromStorage()) {
