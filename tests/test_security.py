@@ -30,5 +30,5 @@ def test_fetch_sessions_security():
         "dir": "/tmp; touch /tmp/pwned"
     }
     # This should not execute the touch command because of shlex.quote
-    result = fetch_sessions_for_host(malicious_dir)
+    result = fetch_sessions_for_host(malicious_dir, '/tmp/.ssh')
     assert "error" in result
