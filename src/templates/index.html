@@ -18,17 +18,14 @@
                     margin: 0;
                     padding: 0;
                     background-color: #000;
-                    overflow: hidden; /* Stop whole page bounce */
                     height: 100dvh;
                     width: 100vw;
-                    overscroll-behavior-y: none;
+                    overscroll-behavior-y: auto; /* Enable pull-to-refresh */
                     -webkit-overflow-scrolling: touch;
-                }
-                body {
                     display: flex;
                     flex-direction: column;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                }        #toolbar { background-color: #333; padding: 10px; display: flex; gap: 10px; align-items: center; touch-action: pan-x pan-y; flex-shrink: 0; }
+                }
+                body { overflow-y: auto; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }        #toolbar { background-color: #333; padding: 10px; display: flex; gap: 10px; align-items: center; touch-action: pan-x pan-y; flex-shrink: 0; }
                 #tab-bar { background-color: #222; display: flex; overflow-x: auto; padding: 0 5px; touch-action: pan-x pan-y; flex-shrink: 0; }
         .tab { 
             padding: 8px 12px; 
@@ -282,7 +279,6 @@
         /* Mobile Controls */
         .is-mobile #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
         .is-mobile #active-connection-info { gap: 5px; }
-        .is-mobile body { height: 100%; width: 100%; position: absolute; }
     </style>
 </head>
 <body>
@@ -1303,7 +1299,29 @@
         });
         resizeObserver.observe(document.getElementById('terminal-container'));
 
-        // Native CSS 100dvh is now handling viewport sizing on mobile
+        // Handle mobile keyboard resizing using Visual Viewport API
+        if (window.visualViewport) {
+            let resizeTimeout;
+            let lastViewHeight = window.visualViewport.height;
+            window.visualViewport.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    const viewHeight = window.visualViewport.height;
+                    // Ignore tiny jitters (less than 20px) to prevent scroll interruption
+                    if (Math.abs(viewHeight - lastViewHeight) < 20) return;
+                    lastViewHeight = viewHeight;
+
+                    // Constrain the body height to exactly the visible viewport height
+                    // This moves the bottom-pinned mobile controls to just above the keyboard
+                    document.body.style.height = `${viewHeight}px`;
+                    
+                    window.scrollTo(0, 0);
+                    tabs.forEach(tab => fitTerminal(tab));
+                }, 100);
+            });
+            // Also initialize with the current height
+            document.body.style.height = `${window.visualViewport.height}px`;
+        }
 
         if (!loadTabsFromStorage()) {
             addNewTab(true);
