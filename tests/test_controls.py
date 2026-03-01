@@ -25,13 +25,13 @@ def mobile_page(server, browser_context):
 
 def test_font_size_controls(mobile_page):
     """Verify A+ and A- buttons adjust terminal font size."""
-    # 1. Get initial font size
+    # Since we enabled WebGL addon, the terminal is rendered on a canvas.
+    # The font size is maintained within the `tab.term.options`
+
     initial_font_size = mobile_page.evaluate("""() => {
         const tabId = sessionStorage.getItem('gemini_active_tab');
-        // We can't easily access the internal 'tabs' array from here, 
-        // but we can check the computed style of the terminal rows.
-        const row = document.querySelector('.xterm-rows div');
-        return parseInt(window.getComputedStyle(row).fontSize);
+        const tab = tabs.find(t => t.id === tabId);
+        return tab.term.options.fontSize;
     }""")
     print(f"Initial font size: {initial_font_size}")
 
@@ -41,8 +41,9 @@ def test_font_size_controls(mobile_page):
     time.sleep(0.5)
 
     plus_font_size = mobile_page.evaluate("""() => {
-        const row = document.querySelector('.xterm-rows div');
-        return parseInt(window.getComputedStyle(row).fontSize);
+        const tabId = sessionStorage.getItem('gemini_active_tab');
+        const tab = tabs.find(t => t.id === tabId);
+        return tab.term.options.fontSize;
     }""")
     print(f"Font size after A+: {plus_font_size}")
     assert plus_font_size > initial_font_size, "A+ should increase font size"
@@ -54,8 +55,9 @@ def test_font_size_controls(mobile_page):
     time.sleep(0.5)
 
     minus_font_size = mobile_page.evaluate("""() => {
-        const row = document.querySelector('.xterm-rows div');
-        return parseInt(window.getComputedStyle(row).fontSize);
+        const tabId = sessionStorage.getItem('gemini_active_tab');
+        const tab = tabs.find(t => t.id === tabId);
+        return tab.term.options.fontSize;
     }""")
     print(f"Font size after A- x2: {minus_font_size}")
     assert minus_font_size < plus_font_size, "A- should decrease font size"
