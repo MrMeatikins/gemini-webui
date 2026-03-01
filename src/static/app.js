@@ -110,11 +110,18 @@
             startSession(tab.id, tab.session.type, tab.session.ssh_target, tab.session.ssh_dir, tab.session.resume, tab.title, shouldReclaim);
         }
 
-        const isMobile = window.innerWidth <= 1080 || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const checkMobile = () => {
+            const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const isNarrow = window.innerWidth <= 800;
+            // True mobile devices OR narrow touch screens (like phones/small tablets)
+            return isMobileUA || (isNarrow && isTouch);
+        };
+        const isMobile = checkMobile();
         if (isMobile) {
             document.documentElement.classList.add('is-mobile');
         }
-        console.log("Environment detection: isMobile =", isMobile);
+        console.log("Environment detection: isMobile =", isMobile, "(UA:", navigator.userAgent, "Width:", window.innerWidth, "Touch:", ('ontouchstart' in window || navigator.maxTouchPoints > 0), ")");
         
         // VisualViewport logic is handled at the bottom of the script
 
