@@ -19,16 +19,14 @@
                     padding: 0;
                     background-color: #000;
                     overflow: hidden; /* Stop whole page bounce */
-                    height: 100%;
-                    width: 100%;
+                    height: 100dvh;
+                    width: 100vw;
                     overscroll-behavior-y: none;
                     -webkit-overflow-scrolling: touch;
                 }
                 body {
                     display: flex;
                     flex-direction: column;
-                    position: absolute;
-                    top: 0; left: 0; right: 0; bottom: 0;
                     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
                 }        #toolbar { background-color: #333; padding: 10px; display: flex; gap: 10px; align-items: center; touch-action: pan-x pan-y; flex-shrink: 0; }
                 #tab-bar { background-color: #222; display: flex; overflow-x: auto; padding: 0 5px; touch-action: pan-x pan-y; flex-shrink: 0; }
@@ -299,16 +297,16 @@
     <div id="tab-bar"></div>
     <div id="terminal-container"></div>
     <div id="mobile-controls" style="display: none;">
-        <div class="control-btn" onclick="sendToTerminal('\t')">Tab</div>
-        <div class="control-btn" onclick="adjustFontSize(1)">A+</div>
-        <div class="control-btn" onclick="adjustFontSize(-1)">A-</div>
-        <div class="control-btn" onclick="sendToTerminal('\x1b[A')">▲</div>
-        <div class="control-btn" onclick="sendToTerminal('\x1b')">Esc</div>
+        <div class="control-btn holdable" data-cmd="\t">Tab</div>
+        <div class="control-btn holdable" data-func="adjustFontSize(1)">A+</div>
+        <div class="control-btn holdable" data-func="adjustFontSize(-1)">A-</div>
+        <div class="control-btn holdable" data-cmd="\x1b[A">▲</div>
+        <div class="control-btn holdable" data-cmd="\x1b">Esc</div>
         <div id="ctrl-toggle" class="control-btn" onclick="toggleCtrl()">Ctrl</div>
         <div id="alt-toggle" class="control-btn" onclick="toggleAlt()">Alt</div>
-        <div class="control-btn" onclick="sendToTerminal('\x1b[D')">◀</div>
-        <div class="control-btn" onclick="sendToTerminal('\x1b[B')">▼</div>
-        <div class="control-btn" onclick="sendToTerminal('\x1b[C')">▶</div>
+        <div class="control-btn holdable" data-cmd="\x1b[D">◀</div>
+        <div class="control-btn holdable" data-cmd="\x1b[B">▼</div>
+        <div class="control-btn holdable" data-cmd="\x1b[C">▶</div>
     </div>
 
     <div id="settings-modal" class="modal">
@@ -1305,36 +1303,7 @@
         });
         resizeObserver.observe(document.getElementById('terminal-container'));
 
-        // Handle mobile keyboard resizing using Visual Viewport API
-        if (window.visualViewport) {
-            let resizeTimeout;
-            let lastViewHeight = window.visualViewport.height;
-            
-            const updateViewport = () => {
-                const viewHeight = window.visualViewport.height;
-                // Ignore tiny jitters (less than 20px) to prevent scroll interruption
-                if (Math.abs(viewHeight - lastViewHeight) < 20) return;
-                lastViewHeight = viewHeight;
-
-                // Set body height to EXACTLY the visual viewport height so things like the toolbar stay nailed to the bottom.
-                document.body.style.height = viewHeight + 'px';
-                
-                // Clear any padding that might have been added previously
-                document.body.style.paddingBottom = '0px';
-                
-                // Ensure we are scrolled to the top of the new visual viewport
-                window.scrollTo(0, 0);
-                tabs.forEach(tab => fitTerminal(tab));
-            };
-
-            window.visualViewport.addEventListener('resize', () => {
-                clearTimeout(resizeTimeout);
-                resizeTimeout = setTimeout(updateViewport, 100);
-            });
-            
-            // Set initial state
-            updateViewport();
-        }
+        // Native CSS 100dvh is now handling viewport sizing on mobile
 
         if (!loadTabsFromStorage()) {
             addNewTab(true);
@@ -1626,6 +1595,53 @@
                 e.preventDefault();
             }, { passive: false });
         }
+
+        // Setup Hold-to-Repeat for mobile buttons
+        document.querySelectorAll('.control-btn.holdable').forEach(btn => {
+            let timeoutId = null;
+            let intervalId = null;
+            let isActive = false;
+
+            const executeAction = () => {
+                const cmd = btn.getAttribute('data-cmd');
+                const func = btn.getAttribute('data-func');
+                if (cmd) sendToTerminal(cmd);
+                if (func) eval(func);
+            };
+
+            const startAction = (e) => {
+                if (e.type === 'touchstart') e.preventDefault(); // prevent mouse emulation and selection
+                if (isActive) return;
+                isActive = true;
+                
+                // Add visual feedback
+                btn.style.opacity = '0.7';
+                
+                executeAction();
+                
+                // Delay before repeating
+                timeoutId = setTimeout(() => {
+                    // Repeat rate
+                    intervalId = setInterval(executeAction, 80);
+                }, 400);
+            };
+
+            const stopAction = (e) => {
+                if (e && e.type === 'touchend') e.preventDefault();
+                isActive = false;
+                btn.style.opacity = '1';
+                clearTimeout(timeoutId);
+                clearInterval(intervalId);
+            };
+
+            btn.addEventListener('mousedown', startAction);
+            btn.addEventListener('touchstart', startAction, { passive: false });
+            
+            btn.addEventListener('mouseup', stopAction);
+            btn.addEventListener('mouseleave', stopAction);
+            btn.addEventListener('touchend', stopAction);
+            btn.addEventListener('touchcancel', stopAction);
+        });
     </script>
 </body>
 </html>
