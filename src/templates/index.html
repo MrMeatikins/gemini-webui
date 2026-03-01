@@ -221,7 +221,7 @@
                     display: none;
                     background: #333;
                     padding: 5px;
-                    grid-template-columns: repeat(5, 1fr);
+                    grid-template-columns: repeat(6, 1fr);
                     gap: 5px;
                     border-top: 1px solid #444;
                     flex-shrink: 0;
@@ -293,16 +293,18 @@
     <div id="tab-bar"></div>
     <div id="terminal-container"></div>
     <div id="mobile-controls" style="display: none;">
-        <div class="control-btn holdable" data-cmd="\t">Tab</div>
+        <div class="control-btn holdable" data-cmd="\x1b">Esc</div>
         <div class="control-btn holdable" data-func="adjustFontSize(1)">A+</div>
         <div class="control-btn holdable" data-func="adjustFontSize(-1)">A-</div>
         <div class="control-btn holdable" data-cmd="\x1b[A">▲</div>
-        <div class="control-btn holdable" data-cmd="\x1b">Esc</div>
+        <div class="control-btn holdable" data-cmd="\t">Tab</div>
+        <div class="control-btn holdable" data-cmd="\x1b[H">Home</div>
         <div id="ctrl-toggle" class="control-btn" onclick="toggleCtrl()">Ctrl</div>
         <div id="alt-toggle" class="control-btn" onclick="toggleAlt()">Alt</div>
         <div class="control-btn holdable" data-cmd="\x1b[D">◀</div>
         <div class="control-btn holdable" data-cmd="\x1b[B">▼</div>
         <div class="control-btn holdable" data-cmd="\x1b[C">▶</div>
+        <div class="control-btn holdable" data-cmd="\x1b[F">End</div>
     </div>
 
     <div id="settings-modal" class="modal">

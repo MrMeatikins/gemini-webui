@@ -41,7 +41,7 @@ def test_mobile_controls_buttons(mobile_page):
     print("DEBUG HTML:", html)
     
     # 3. Check for specific buttons
-    expected_buttons = ["Esc", "Tab", "Ctrl", "Alt", "▲", "▼", "◀", "▶", "A+", "A-"]
+    expected_buttons = ["Esc", "Tab", "Ctrl", "Alt", "▲", "▼", "◀", "▶", "A+", "A-", "Home", "End"]
     for btn_text in expected_buttons:
         btn = mobile_page.locator("#mobile-controls .control-btn").get_by_text(btn_text, exact=True)
         expect(btn.first).to_be_visible()
