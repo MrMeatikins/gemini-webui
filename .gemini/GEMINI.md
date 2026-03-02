@@ -107,4 +107,10 @@ When addressing "code smells" or decoupling tight architectures, you MUST follow
 - **Changing Auth**: Modify `check_auth` in `src/app.py`.
 - **Adjusting Build**: Update `Dockerfile` or `Jenkinsfile`.
 
+## 7. Agent Delegation Pattern
+To preserve the main context window for high-level planning and architectural decisions, the Primary Agent should actively delegate specific coding tasks to local subagents whenever possible.
+
+1. **`plane_kanban_executor`**: Use this subagent to execute specific tasks or bug fixes. First, read the ticket from Plane or define the plan, then call this agent to actually modify the code and perform local verification.
+2. **`quality_control_agent`**: Use this subagent to blindly review the changes made by the executor to ensure no regressions were introduced.
+
 Stay efficient, stay secure. Good luck.
