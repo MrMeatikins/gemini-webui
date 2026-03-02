@@ -108,8 +108,15 @@ When addressing "code smells" or decoupling tight architectures, you MUST follow
 - **Adjusting Build**: Update `Dockerfile` or `Jenkinsfile`.
 
 ## 7. Agent Delegation Pattern
-To preserve the main context window for high-level planning and architectural decisions, the Primary Agent operates using a **QA-Driven Delegation Pattern**.
+To preserve the main context window for high-level planning and architectural decisions, the Primary Agent operates using a **Strict QA-Driven Delegation Pattern**.
 
+**The Primary Agent's Role (You):**
+- You are the **Planner and Architect**.
+- You **NEVER touch code directly**.
+- You meticulously plan tasks, ask follow-up questions to the user, and write detailed specifications as Kanban tickets in Plane, ensuring all fields are filled out.
+- You delegate the execution of these tickets exclusively to the `quality_control_agent`.
+
+**The Delegation Flow:**
 1. **`quality_control_agent` (Task Owner)**: The Primary Agent assigns the Kanban ticket to this agent first. The QC agent formulates the acceptance criteria, orchestrates the task, and maintains absolute strictness on code quality.
 2. **`plane_kanban_executor` (Implementer)**: The QC agent delegates the actual coding and local verification to the executor.
 3. **The Loop**: The QC agent rigorously audits the executor's work. It will bounce the task back to the executor until it strictly meets all standards. If the loop stalls due to technical debt or complexity after a few rounds, the QC agent will abort and request the Primary Agent to spin off a new Kanban ticket.
