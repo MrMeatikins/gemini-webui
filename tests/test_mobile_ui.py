@@ -130,11 +130,20 @@ def test_mobile_resume_options(custom_mobile_page):
     page.wait_for_selector(".terminal-instance", timeout=10000)
     
     # Wait for the mock output
-    try:
-        expect(page.locator(".xterm-rows")).to_contain_text("MOCK_EXECUTED: -r", timeout=15000)
-    except AssertionError:
-        print("ACTUAL TERMINAL OUTPUT:", page.locator(".xterm-rows").inner_text())
-        raise
+    page.wait_for_timeout(2000)
+    content = page.evaluate("""() => {
+        const tab = tabs.find(t => t.id === activeTabId);
+        if (tab && tab.term) {
+            let out = "";
+            for (let i = 0; i < 5; i++) {
+                const line = tab.term.buffer.active.getLine(i);
+                if (line) out += line.translateToString() + "\\n";
+            }
+            return out;
+        }
+        return "";
+    }""")
+    assert "MOCK_EXECUTED: -r" in content
     
     # Go back to launcher by reloading
     page.goto(page.url)
@@ -151,7 +160,20 @@ def test_mobile_resume_options(custom_mobile_page):
     page.wait_for_selector(".terminal-instance", timeout=10000)
     
     # The command should contain `-r 1` because the mock script session id is 1
-    expect(page.locator(".xterm-rows")).to_contain_text("MOCK_EXECUTED: -r 1", timeout=15000)
+    page.wait_for_timeout(2000)
+    content2 = page.evaluate("""() => {
+        const tab = tabs.find(t => t.id === activeTabId);
+        if (tab && tab.term) {
+            let out = "";
+            for (let i = 0; i < 5; i++) {
+                const line = tab.term.buffer.active.getLine(i);
+                if (line) out += line.translateToString() + "\\n";
+            }
+            return out;
+        }
+        return "";
+    }""")
+    assert "MOCK_EXECUTED: -r 1" in content2
 
 @pytest.mark.timeout(20)
 def test_mobile_keyboard_scroll_prevention(mobile_page):

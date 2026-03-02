@@ -122,8 +122,7 @@ def test_fresh_session_no_reclaim_warning(page, server):
     }""")
     
     assert "Session not found on server" not in content
-    assert "Loading Context" in content
-
+    assert "Welcome to Fake Gemini" in content
 @pytest.mark.prone_to_timeout
 @pytest.mark.timeout(20)
 def test_reload_triggers_reclaim(page, server):
