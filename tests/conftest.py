@@ -27,6 +27,7 @@ def server(test_data_dir):
     env["FLASK_USE_RELOADER"] = "false"
     env["FLASK_DEBUG"] = "false"
     env["SKIP_MONKEY_PATCH"] = "false" # Server SHOULD monkeypatch
+    env["SKIP_MULTIPLEXER"] = "true"
     
     mock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock")
     env["PATH"] = f"{mock_dir}:{env.get('PATH', '')}"

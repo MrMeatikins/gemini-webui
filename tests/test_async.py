@@ -79,10 +79,11 @@ def test_pty_restart_basic(mock_socketio, mock_pty):
     
     with app.test_request_context('/'):
         with patch('src.app.get_config_paths') as mock_paths, \
+             patch('shutil.which', return_value=None), \
              patch('os.chdir'), \
              patch('os.execv'), \
-             patch('os._exit'):
-            
+             patch('os.execvp'), \
+             patch('os._exit'):            
             mock_paths.return_value = ("/data", "/data/config.json", "/data/.ssh")
             
             # Trigger restart (child branch)

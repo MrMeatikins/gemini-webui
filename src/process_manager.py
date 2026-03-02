@@ -52,7 +52,8 @@ def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
         cmd.extend(['--', ssh_target, login_wrapped_cmd])
     else:
         # Use workspace for local session listing to match startSession
-        work_dir = "/data/workspace"
+        data_dir = os.environ.get("DATA_DIR", "/data")
+        work_dir = os.path.join(data_dir, "workspace")
         if os.path.exists(work_dir):
             cmd = ['/bin/sh', '-c', f"cd {work_dir} && {gemini_bin} --list-sessions"]
         else:
@@ -79,6 +80,9 @@ def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
 
 def _wrap_with_multiplexer(cmd):
     """Wraps the terminal command in a multiplexer (tmux or dtach) to prevent visual corruption on detach/re-attach."""
+    if os.environ.get("SKIP_MULTIPLEXER") == "true":
+        return cmd
+        
     import shutil
     import uuid
     session_id = f"gemini_{uuid.uuid4().hex[:8]}"
@@ -147,7 +151,8 @@ def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin
         return _wrap_with_multiplexer(cmd)
     else:
         # Workspace initialization with failover guidance
-        work_dir = "/data/workspace"
+        data_dir = os.environ.get("DATA_DIR", "/data")
+        work_dir = os.path.join(data_dir, "workspace")
         setup_cmd = f"mkdir -p {work_dir} 2>/dev/null || {{ "
         setup_cmd += "printf '\\r\\n\\033[1;33mWARNING: Persistence volume not found at /data.\\033[0m\\r\\n'; "
         setup_cmd += "printf 'To enable persistence and prevent data loss, mount a volume:\\r\\n\\r\\n'; "
