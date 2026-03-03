@@ -111,7 +111,8 @@ def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin
         remote_env = "export TERM=xterm-256color; export COLORTERM=truecolor; export FORCE_COLOR=3; "
         
         # Smart command construction: check for gemini, drop to shell if missing
-        remote_cmd = f"{remote_env} if command -v {gemini_bin} >/dev/null 2>&1; then "
+        # Source profiles quietly to populate PATH (e.g. npm globals) without crashing on errors like missing brew
+        remote_cmd = f"{remote_env} source ~/.profile 2>/dev/null; source ~/.bash_profile 2>/dev/null; source ~/.bashrc 2>/dev/null; if command -v {gemini_bin} >/dev/null 2>&1; then "
         if ssh_dir and ssh_dir != "~":
             if ssh_dir.startswith('~'):
                 suffix = ssh_dir[1:]
