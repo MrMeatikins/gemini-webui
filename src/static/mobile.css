@@ -7,8 +7,6 @@
     gap: 5px;
     border-top: 1px solid #444;
     flex-shrink: 0;
-    touch-action: none;
-    overscroll-behavior: none;
     padding-bottom: env(safe-area-inset-bottom);
 }
 .control-btn { 
@@ -42,7 +40,6 @@
     -webkit-overflow-scrolling: touch;
     background: transparent;
     touch-action: pan-y;
-    overscroll-behavior: none;
 }
 .mobile-scroll-content {
     width: 1px;
@@ -55,10 +52,9 @@
 .is-mobile .modal-content { width: 98% !important; margin: 10px auto !important; padding: 10px !important; }
 
 /* Mobile Controls overrides */
-.is-mobile #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; touch-action: none; overscroll-behavior: none; }
-.is-mobile #tab-bar { touch-action: pan-x; overscroll-behavior: none; }
+.is-mobile #toolbar { padding: 5px; gap: 5px; flex-wrap: wrap; }
+.is-mobile #tab-bar { touch-action: pan-x; }
 .is-mobile #active-connection-info { gap: 5px; }
 
 html, body {
-    overscroll-behavior: none;
 }

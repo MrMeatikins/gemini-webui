@@ -103,6 +103,10 @@ When addressing "code smells" or decoupling tight architectures, you MUST follow
 
 ---
 
+### Mandatory: Unified Web/PWA Experience
+- There must be **absolutely zero difference** in functionality or behavior between the mobile web interface and the PWA.
+- **Mobile Refresh**: Pull-to-refresh (downward swipe from top) must **never** be blocked. The application is a web-based terminal interface, not a "standalone app" that needs to lock down standard browser navigation/refresh gestures. Avoid using `overscroll-behavior: none` or restrictive `touch-action` on viewport layers (`html`, `body`, `#toolbar`, etc.).
+
 ## 6. Orientation for Future Gemini Agents
 
 ### Before Modifying Code:
