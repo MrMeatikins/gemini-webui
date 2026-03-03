@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gemini-webui-v0.1.4';
+const CACHE_NAME = 'gemini-webui-v0.1.5';
 const ASSETS = [
   '/',
   '/static/favicon.svg',
@@ -11,10 +11,25 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
     })
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME && cacheName.startsWith('gemini-webui-v')) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
   );
 });
 
