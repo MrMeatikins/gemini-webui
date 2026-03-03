@@ -27,11 +27,11 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 try:
     from auth_ldap import check_auth
     from session_manager import Session, SessionManager
-    from process_manager import validate_ssh_target, fetch_sessions_for_host, build_terminal_command
+    from process_manager import validate_ssh_target, fetch_sessions_for_host, build_terminal_command, get_remote_command_prefix
 except ImportError:
     from src.auth_ldap import check_auth
     from src.session_manager import Session, SessionManager
-    from src.process_manager import validate_ssh_target, fetch_sessions_for_host, build_terminal_command
+    from src.process_manager import validate_ssh_target, fetch_sessions_for_host, build_terminal_command, get_remote_command_prefix
 
 # Global config holder and defaults
 config = {}
@@ -676,9 +676,8 @@ def terminate_remote_session():
         if not validate_ssh_target(ssh_target):
             return jsonify({"error": "Invalid SSH target"}), 400
         
-        remote_cmd = f"gemini --terminate {session_id}"
-        if ssh_dir and ssh_dir != "~":
-            remote_cmd = f"cd {shlex.quote(ssh_dir)} && {remote_cmd}"
+        remote_prefix = get_remote_command_prefix(ssh_dir, GEMINI_BIN)
+        remote_cmd = f"{remote_prefix} if command -v {GEMINI_BIN} >/dev/null 2>&1; then {GEMINI_BIN} --terminate {shlex.quote(str(session_id))}; fi"
             
         cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=no']
         _, _, ssh_dir_path = get_config_paths()

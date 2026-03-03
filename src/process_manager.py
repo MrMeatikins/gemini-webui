@@ -25,6 +25,24 @@ def build_ssh_args(ssh_target, ssh_dir_path):
                 cmd.extend(['-i', os.path.join(ssh_dir_path, f)])
     return cmd
 
+def get_remote_command_prefix(ssh_dir, gemini_bin='gemini'):
+    """Builds a robust prefix for remote commands to ensure PATH and environment are loaded."""
+    # Common color and path exports
+    prefix = "export PATH=\"$PATH:$HOME/.local/bin:$HOME/bin\"; "
+    prefix += "export TERM=xterm-256color; export COLORTERM=truecolor; export FORCE_COLOR=3; "
+    
+    # Source profiles quietly to populate PATH (e.g. npm globals, nvm, etc.)
+    prefix += "source ~/.profile 2>/dev/null; source ~/.bash_profile 2>/dev/null; source ~/.bashrc 2>/dev/null; "
+    
+    if ssh_dir and ssh_dir != "~":
+        if ssh_dir.startswith('~'):
+            suffix = ssh_dir[1:]
+            prefix += f"cd ~{shlex.quote(suffix)} 2>/dev/null || cd ~; "
+        else:
+            prefix += f"cd {shlex.quote(ssh_dir)} 2>/dev/null || cd ~; "
+            
+    return prefix
+
 def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
     """Internal helper to fetch sessions for a host config."""
     ssh_target = host.get('target')
@@ -34,17 +52,11 @@ def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
         if not validate_ssh_target(ssh_target):
             return {"error": "Invalid SSH target format", "timestamp": time.time()}
             
-        gemini_list_cmd = f"{gemini_bin} --list-sessions" if gemini_bin != 'gemini' else "gemini --list-sessions"
-        remote_env = "export TERM=xterm-256color; export COLORTERM=truecolor; export FORCE_COLOR=3; "
-        if ssh_dir and ssh_dir != "~":
-            # Handle tilde expansion for remote shell
-            if ssh_dir.startswith('~'):
-                suffix = ssh_dir[1:]
-                remote_cmd = f"{remote_env} cd ~{shlex.quote(suffix)} && {gemini_list_cmd}"
-            else:
-                remote_cmd = f"{remote_env} cd {shlex.quote(ssh_dir)} && {gemini_list_cmd}"
-        else:
-            remote_cmd = f"{remote_env} {gemini_list_cmd}"
+        gemini_list_cmd = f"{gemini_bin} --list-sessions"
+        remote_prefix = get_remote_command_prefix(ssh_dir, gemini_bin)
+        
+        # Check for gemini before running list-sessions to avoid ugly bash errors
+        remote_cmd = f"{remote_prefix} if command -v {gemini_bin} >/dev/null 2>&1; then {gemini_list_cmd}; else exit 0; fi"
             
         login_wrapped_cmd = f"bash -l -c {shlex.quote(remote_cmd)}"
             
@@ -107,21 +119,11 @@ def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin
         elif resume and str(resume).lower() != 'false':
             gemini_base_cmd += f" -r {resume}"
         
-        # Export color env vars remotely
-        remote_env = "export TERM=xterm-256color; export COLORTERM=truecolor; export FORCE_COLOR=3; "
+        remote_prefix = get_remote_command_prefix(ssh_dir, gemini_bin)
         
         # Smart command construction: check for gemini, drop to shell if missing
-        # Source profiles quietly to populate PATH (e.g. npm globals) without crashing on errors like missing brew
-        remote_cmd = f"{remote_env} source ~/.profile 2>/dev/null; source ~/.bash_profile 2>/dev/null; source ~/.bashrc 2>/dev/null; if command -v {gemini_bin} >/dev/null 2>&1; then "
-        if ssh_dir and ssh_dir != "~":
-            if ssh_dir.startswith('~'):
-                suffix = ssh_dir[1:]
-                remote_cmd += f"cd ~{shlex.quote(suffix)} && {gemini_base_cmd}; "
-            else:
-                remote_cmd += f"cd {shlex.quote(ssh_dir)} && {gemini_base_cmd}; "
-        else:
-            remote_cmd += f"{gemini_base_cmd}; "
-        
+        remote_cmd = f"{remote_prefix} if command -v {gemini_bin} >/dev/null 2>&1; then "
+        remote_cmd += f"{gemini_base_cmd}; "
         remote_cmd += "else "
         remote_cmd += "printf '\\r\\n\\033[1;31mError: gemini CLI not found on remote host.\\033[0m\\r\\n'; "
         remote_cmd += "printf 'Please install it from: \\033[1;34mhttps://geminicli.com/\\033[0m\\r\\n\\r\\n'; "
