@@ -678,6 +678,7 @@ def terminate_remote_session():
         
         remote_prefix = get_remote_command_prefix(ssh_dir, GEMINI_BIN)
         remote_cmd = f"{remote_prefix} if command -v {GEMINI_BIN} >/dev/null 2>&1; then {GEMINI_BIN} --terminate {shlex.quote(str(session_id))}; fi"
+        login_wrapped_cmd = f"bash -ilc {shlex.quote(remote_cmd)}"
             
         cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=no']
         _, _, ssh_dir_path = get_config_paths()
@@ -687,7 +688,7 @@ def terminate_remote_session():
             for f in os.listdir(ssh_dir_path):
                 if os.path.isfile(os.path.join(ssh_dir_path, f)) and f not in ['config', 'known_hosts'] and not f.endswith('.pub'):
                     cmd.extend(['-i', os.path.join(ssh_dir_path, f)])
-        cmd.extend(['--', ssh_target, remote_cmd])
+        cmd.extend(['--', ssh_target, login_wrapped_cmd])
     else:
         cmd = [GEMINI_BIN, '--terminate', str(session_id)]
         

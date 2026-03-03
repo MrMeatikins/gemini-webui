@@ -58,7 +58,7 @@ def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
         # Check for gemini before running list-sessions to avoid ugly bash errors
         remote_cmd = f"{remote_prefix} if command -v {gemini_bin} >/dev/null 2>&1; then {gemini_list_cmd}; else exit 0; fi"
             
-        login_wrapped_cmd = f"bash -l -c {shlex.quote(remote_cmd)}"
+        login_wrapped_cmd = f"bash -ilc {shlex.quote(remote_cmd)}"
             
         cmd = build_ssh_args(ssh_target, ssh_dir_path)
         cmd.extend(['--', ssh_target, login_wrapped_cmd])
@@ -131,7 +131,7 @@ def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin
         remote_cmd += "fi"
         
         # Wrap in login shell to ensure .profile/.bash_profile PATH is loaded
-        login_wrapped_cmd = f"bash -l -c {shlex.quote(remote_cmd)}"
+        login_wrapped_cmd = f"bash -ilc {shlex.quote(remote_cmd)}"
             
         cmd = ['ssh', '-t']
         
