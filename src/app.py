@@ -216,7 +216,8 @@ csp = {
         'https://cdn.jsdelivr.net',
         'https://cdnjs.cloudflare.com',
         'https://unpkg.com',
-        "'unsafe-inline'"
+        "'unsafe-inline'",
+        "'unsafe-eval'"
     ],
     'style-src': [
         "'self'",

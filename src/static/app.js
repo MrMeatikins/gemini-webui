@@ -696,22 +696,23 @@
                                     const deltaY = Math.abs(e.changedTouches[0].clientY - startY);
                                     const duration = Date.now() - touchStartTime;
 
-                                    if (deltaX < 10 && deltaY < 10 && duration < 300) {
-                                        // This was a quick tap. 
-                                        // 1. Clear any active selection
-                                        window.getSelection().removeAllRanges();
-                                        
-                                        // 2. Immediately focus the terminal
-                                        if (tab.term) {
-                                            tab.term.focus();
-                                        }
-
-                                        // 3. Briefly disable pointer-events to let the tap through for focus
-                                        proxy.style.pointerEvents = 'none';
-                                        setTimeout(() => {
-                                            if (proxy) proxy.style.pointerEvents = 'all';
-                                        }, 150);
+                                if (deltaX < 10 && deltaY < 10 && duration < 300) {
+                                    // This was a quick tap. 
+                                    // 1. Clear any active selection
+                                    window.getSelection().removeAllRanges();
+                                    
+                                    // 2. Immediately focus the terminal (with a tiny delay to ensure it sticks)
+                                    if (tab.term) {
+                                        tab.term.focus();
+                                        setTimeout(() => { if (tab.term) tab.term.focus(); }, 10);
                                     }
+
+                                    // 3. Briefly disable pointer-events to let the tap through for focus
+                                    proxy.style.pointerEvents = 'none';
+                                    setTimeout(() => {
+                                        if (proxy) proxy.style.pointerEvents = 'all';
+                                    }, 150);
+                                }
                                 }, {passive: true});
                 
                 // Allow proxy to recover pointer events when clicking elsewhere or after selection
