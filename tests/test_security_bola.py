@@ -53,7 +53,7 @@ def test_bola_terminate_session(client):
         sess['user_id'] = user_b
         sess['authenticated'] = True
 
-    response = client.post('/api/management/sessions/terminate', json={"tab_id": "tab_A1"})
+    response = client.delete('/api/management/sessions/tab_A1')
     
     # The session_manager.get_session returns None because user_id does not match
     # Expect a 404 (Session not found) rather than 403, but either way it is rejected
