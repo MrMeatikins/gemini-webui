@@ -1,38 +1,27 @@
 # Gemini WebUI
 
-**The ultimate "Couch-Friendly" terminal for your Gemini AI.**
+**The ultimate management interface for your Gemini AI, built for mobility and persistence.**
 
-Gemini WebUI provides a high-fidelity, persistent web interface for the Gemini CLI. It allows you to monitor your projects, run long-running AI tasks, and interact with your host machine from any device with a browser—whether you're at your desk or relaxing on the couch with a tablet.
+Gemini WebUI provides a high-fidelity, persistent web interface for the Gemini CLI. Whether you are monitoring complex projects, executing long-running AI tasks, or interacting with remote host machines, Gemini WebUI delivers a seamless experience across all your devices.
 
 ## 🚀 Key Features
 
-### 📱 Mobile-First Accessibility
-*   **Touch-Native Drag & Drop**: Reorder connection cards with smooth, mobile-optimized touch handles—bypassing unreliable mobile browser drag-and-drop APIs.
-*   **Adaptive Viewport Integration**: Dynamically adjusts layout and terminal fit when the on-screen keyboard is toggled, ensuring your prompt is always visible.
-*   **Compact UI Controls**: Optimized mobile control bar with reduced footprint, perfectly fitting narrow displays like the Pixel 9 Pro Fold.
-*   **Smart Keyboard Handling**: implemements a "Single Character Buffer" to prevent mobile OS autocorrect and predictive text from corrupting terminal input.
+*   **Multi-Environment Management**
+    Manage multiple Gemini CLI instances across various computers, projects, and workspaces from a single, unified dashboard.
+*   **Mobile-First Design**
+    Experience a fully responsive UI equipped with mobile-friendly controls, enabling full Gemini CLI functionality on the go.
+*   **Session Persistence**
+    True cross-device persistence allows you to resume live sessions from your desktop directly on your phone or tablet without losing valuable context.
+*   **Seamless File Management**
+    Upload files directly through the UI via intuitive drag-and-drop or dedicated buttons, making your data immediately available to the AI.
+*   **Scoped Environments**
+    Robust support for scoped development or per-app system administrator setups, ensuring secure and isolated AI environments tailored to your needs.
+*   **Easy Deployment**
+    Experience a frictionless quick start and simple installation process leveraging Docker and Docker Compose.
 
-### 🖥️ True Cross-Device Persistence
-*   **Independent Window State**: Each browser tab maintains its own workspace configuration using `sessionStorage`, enabling native multi-monitor workflows.
-*   **Session Reclaiming**: Easily "pull" running terminal sessions from one device to another via the "Backend Managed Sessions" dashboard.
-*   **Real-time Reattach Notifications**: Instantly notified if another device reclaims your active session ("Session stolen by another device").
-*   **Visual Continuity**: Every session maintains a 10,000-character rolling buffer, ensuring your visual state is perfectly restored upon reattachment or refresh.
-*   **Always-On Background Tasks**: Backend PTY processes continue running even if all browser windows are closed.
+## 🏗 Architecture Overview
 
-### 🔌 Advanced Connectivity
-*   **Dynamic Launcher**: Backend session states are polled every 10 seconds, ensuring your connection dashboard is always up-to-date without refreshing.
-*   **Host Management**: Add, Edit, Delete, and Reorder connection cards with an optimistic, animated interface.
-*   **Quick Connect Bar**: Instantly connect via SSH using `user@host[:port] [directory]` syntax with automatic persistence.
-*   **Descriptive Tab Titles**: Tab titles automatically sync with resumed Gemini session names or terminal escape sequences.
-
-### 🔑 Robust SSH Key Management
-*   **Instance Key Generation**: Automatic generation of a unique Ed25519 key pair on first run.
-*   **Clipboard Fallback**: Robust "Copy to Clipboard" support that works in both secure (HTTPS) and non-secure (HTTP/IP-based) dev environments.
-*   **Secure Authorization Snippet**: One-click "Copy Snippet" provides a one-liner to authorize the WebUI instance on any remote host.
-
----
-
-## 🏗 Architecture
+The system is designed with real-time communication and persistence at its core:
 
 ```mermaid
 graph TD
@@ -44,13 +33,16 @@ graph TD
     end
 ```
 
-## 🛠 Configuration
+## 🛠 Configuration Guide
+
+Gemini WebUI is highly customizable to fit both stand-alone and enterprise environments.
 
 ### Authentication Modes
-1.  **LDAP (Enterprise)**: If `LDAP_SERVER` is configured, it is the **only** permitted method.
-2.  **Local Admin (Stand-alone)**: If LDAP is **not** configured, the app uses `ADMIN_USER` and `ADMIN_PASS` (both default to `admin`).
+1.  **LDAP (Enterprise)**: If `LDAP_SERVER` is configured, it becomes the exclusive authentication method, perfect for corporate networks.
+2.  **Local Admin (Stand-alone)**: If LDAP is not configured, the application falls back to local authentication using `ADMIN_USER` and `ADMIN_PASS` (both default to `admin`).
 
 ### Environment Variables
+
 | Variable | Description | Default |
 | :--- | :--- | :--- |
 | `LDAP_SERVER` | Address of the LDAP/AD server | - |
@@ -63,16 +55,14 @@ graph TD
 | `GEMINI_BIN` | Path to the Gemini executable | `gemini` |
 
 ### Volumes
-*   `data:/data`: Persists app config, SSH keys, and CLI state (linked to `/home/node/.gemini`).
+*   `data:/data`: Persists application configuration, SSH keys, and CLI state (linked internally to `/home/node/.gemini`).
 
----
+## 🚀 Quick Start & Easy Deployment
 
-## 🏗 Quick Start
-
-Build and launch the container with a single command:
+Deploying Gemini WebUI is designed to be as straightforward as possible. Build and launch the container with a single command:
 
 ```bash
 docker compose up --build --force-recreate -d
 ```
 
-Once running, access the interface at `http://localhost:5000`.
+Once the container is running, access the interface by navigating to `http://localhost:5000` in your web browser.
