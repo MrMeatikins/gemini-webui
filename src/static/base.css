@@ -105,3 +105,24 @@ input[type="text"], textarea { width: 100%; background: #444; color: white; bord
 ::-webkit-scrollbar-corner { background: #1e1e1e; }
 /* Firefox support */
 * { scrollbar-width: thin; scrollbar-color: #444 #1e1e1e; }
+
+.drop-zone {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(36, 114, 200, 0.2);
+    border: 2px dashed #2472c8;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.drop-zone.active {
+    opacity: 1;
+}

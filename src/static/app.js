@@ -1542,4 +1542,54 @@
             closeFileTransfer();
             filenameInput.value = '';
         }
+
+        // --- Drag and Drop Feature ---
+        const dropZone = document.createElement('div');
+        dropZone.className = 'drop-zone';
+        dropZone.innerText = 'Drop files here to upload';
+        document.body.appendChild(dropZone);
+
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('active');
+        });
+
+        document.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            if (e.target === dropZone || e.relatedTarget === null) {
+                dropZone.classList.remove('active');
+            }
+        });
+
+        document.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('active');
+
+            if (e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const response = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        const tab = tabs.find(t => t.id === activeTabId);
+                        if (tab && tab.socket && tab.state === 'terminal') {
+                            tab.socket.emit('pty-input', {input: `> I uploaded @${result.filename} `});
+                            tab.term.focus();
+                        } else {
+                            alert('File uploaded successfully');
+                        }
+                    } else {
+                        alert('Upload failed: ' + result.message);
+                    }
+                } catch (err) {
+                    alert('Upload error: ' + err.message);
+                }
+            }
+        });
     

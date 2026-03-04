@@ -836,8 +836,8 @@ def upload_file():
     filename = secure_filename(file.filename)
     if not filename:
         return jsonify({"status": "error", "message": "Invalid filename"}), 400
-        
-    workspace_dir = "/data/workspace"
+
+    workspace_dir = os.environ.get("DATA_DIR", "/data")
     os.makedirs(workspace_dir, exist_ok=True)
     save_path = os.path.join(workspace_dir, filename)
     file.save(save_path)
@@ -847,7 +847,7 @@ def upload_file():
 @authenticated_only
 def download_file(filename):
     filename = secure_filename(filename)
-    workspace_dir = "/data/workspace"
+    workspace_dir = os.environ.get("DATA_DIR", "/data")
     return send_from_directory(workspace_dir, filename, as_attachment=True)
 
 @app.route('/health')
