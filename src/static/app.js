@@ -55,6 +55,27 @@
         let titleFlashInterval = null;
         let originalPageTitle = 'Gemini WebUI';
 
+        let hostHealthStates = {};
+
+        function updateHostHealthIndicator(tabId, label, isSuccess) {
+            if (!hostHealthStates[label]) hostHealthStates[label] = { failures: 2 }; // Start at red
+            
+            if (isSuccess) {
+                hostHealthStates[label].failures = 0;
+            } else {
+                hostHealthStates[label].failures++;
+            }
+
+            const indicatorId = `${tabId}_health_${label.replace(/[^a-z0-9]/gi, '')}`;
+            const el = document.getElementById(indicatorId);
+            if (el) {
+                const f = hostHealthStates[label].failures;
+                if (f === 0) el.innerText = '🟢';
+                else if (f === 1) el.innerText = '🟡';
+                else el.innerText = '🔴';
+            }
+        }
+
         function updatePageTitle() {
             const hasActionRequired = tabs.some(t => t.title && t.title.includes('✋'));
             const newTitle = hasActionRequired ? '✋ Gemini WebUI' : originalPageTitle;
@@ -339,12 +360,19 @@
 
             // Initial fetch
             refreshBackendSessionsList(id);
-            
-            // Set up polling while this launcher is visible
-            if (launcherRefreshInterval) clearInterval(launcherRefreshInterval);
-            launcherRefreshInterval = setInterval(() => refreshBackendSessionsList(id), 10000);
 
             const hosts = await (await fetch('/api/hosts')).json();
+
+            // Set up polling while this launcher is visible
+            if (launcherRefreshInterval) clearInterval(launcherRefreshInterval);
+            launcherRefreshInterval = setInterval(() => {
+                refreshBackendSessionsList(id);
+                hosts.forEach(conn => {
+                    const sessionListId = `${id}_sessions_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
+                    fetchSessions(id, conn, sessionListId, false, false);
+                });
+            }, 10000);
+
             const connContainer = document.getElementById(id + '_connections');
             let draggedCard = null;
             let placeholder = document.createElement('div');
@@ -356,11 +384,14 @@
                 card.dataset.label = conn.label;
                 
                 const sessionListId = `${id}_sessions_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
+                const healthId = `${id}_health_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
                 card.innerHTML = `
                     <div class="connection-header">
                         <div class="connection-drag-handle" title="Drag to reorder" draggable="true">⠿</div>
                         <div class="connection-title">
-                            <div style="font-size: 18px; color: #fff; margin-bottom: 2px;">${conn.label}</div>
+                            <div style="font-size: 18px; color: #fff; margin-bottom: 2px;">
+                                <span id="${healthId}" style="font-size: 12px; margin-right: 5px; vertical-align: middle;">🔴</span>${conn.label}
+                            </div>
                             <div style="font-size: 11px; font-family: monospace; color: #888; opacity: 0.8;">${conn.target || 'local'} ${conn.dir || ''}</div>
                         </div>
                         <div class="connection-actions">
@@ -538,7 +569,12 @@
             if (conn.type === 'ssh') { query.set('ssh_target', conn.target); if (conn.dir) query.set('ssh_dir', conn.dir); }
             if (useCache) query.set('cache', 'true');
             try {
-                const data = await (await fetch('/api/sessions?' + query.toString())).json();
+                const response = await fetch('/api/sessions?' + query.toString());
+                if (!response.ok) throw new Error("HTTP error " + response.status);
+                const data = await response.json();
+                
+                if (!useCache) updateHostHealthIndicator(tabId, conn.label, !data.error);
+
                 const listEl = document.getElementById(targetId); if (!listEl) return;
                 if (data.error) { 
                     let errorHtml = `<div style="padding: 10px; color: #f14c4c; font-size: 11px;">Error: ${data.error}</div>`;
@@ -572,7 +608,10 @@
                     listEl.innerHTML = html + '</div>';
                 }
                 if (useCache) fetchSessions(tabId, conn, targetId, forceAll, false); // Update after cache load
-            } catch (e) { console.error(e); }
+            } catch (e) { 
+                if (!useCache) updateHostHealthIndicator(tabId, conn.label, false);
+                console.error(e); 
+            }
         }
 
         function parseSessions(output) {
@@ -1071,8 +1110,22 @@
                 const refreshBtn = document.getElementById(`${id}_backend_sessions`);
                 if (refreshBtn) {
                     refreshBackendSessionsList(id);
-                    if (launcherRefreshInterval) clearInterval(launcherRefreshInterval);
-                    launcherRefreshInterval = setInterval(() => refreshBackendSessionsList(id), 10000);
+                    
+                    fetch('/api/hosts').then(r => r.json()).then(hosts => {
+                        hosts.forEach(conn => {
+                            const sessionListId = `${id}_sessions_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
+                            fetchSessions(id, conn, sessionListId, false, false);
+                        });
+
+                        if (launcherRefreshInterval) clearInterval(launcherRefreshInterval);
+                        launcherRefreshInterval = setInterval(() => {
+                            refreshBackendSessionsList(id);
+                            hosts.forEach(conn => {
+                                const sessionListId = `${id}_sessions_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
+                                fetchSessions(id, conn, sessionListId, false, false);
+                            });
+                        }, 10000);
+                    });
                 }
             }
 
