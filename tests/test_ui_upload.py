@@ -197,5 +197,49 @@ def test_folder_drag_and_drop_upload(page, test_data_dir):
     assert "myfolder/subfolder/file2.txt" in content or "2 files including" in content, f"Expected indication of file2.txt uploaded or 2 files uploaded, got terminal content: {content}"
     
     # Check if files actually exist in test_data_dir
-    assert os.path.exists(os.path.join(test_data_dir, "myfolder", "file1.txt"))
-    assert os.path.exists(os.path.join(test_data_dir, "myfolder", "subfolder", "file2.txt"))
+    assert os.path.exists(os.path.join(test_data_dir, "workspace", "myfolder", "file1.txt"))
+    assert os.path.exists(os.path.join(test_data_dir, "workspace", "myfolder", "subfolder", "file2.txt"))
+
+@pytest.mark.prone_to_timeout
+@pytest.mark.timeout(30)
+def test_workspace_file_upload_button_injection(page, test_data_dir):
+    # Start a terminal session
+    btns = page.locator('.tab-instance.active button:has-text("Start New")')
+    expect(btns.first).to_be_visible(timeout=5000)
+    btns.first.click()
+    
+    expect(page.locator('#active-connection-info')).to_be_visible(timeout=5000)
+
+    # Open the file transfer modal
+    page.click('button:has-text("Files")')
+    expect(page.locator('#file-transfer-modal')).to_be_visible(timeout=5000)
+    
+    # Create a temporary file to upload
+    test_file_path = os.path.join(test_data_dir, "test_upload_file2.txt")
+    with open(test_file_path, "w") as f:
+        f.write("Test content for upload 2")
+        
+    # Set the file input
+    page.locator('#workspace-upload-file').set_input_files(test_file_path)
+    
+    # Click upload button
+    page.click('button:has-text("Upload File")')
+    
+    # Wait for the injection
+    page.wait_for_timeout(2000)
+    
+    content = page.evaluate("""() => {
+        const tab = tabs.find(t => t.id === activeTabId);
+        if (tab && tab.term) {
+            let out = "";
+            for (let i = 0; i < 5; i++) {
+                const line = tab.term.buffer.active.getLine(i);
+                if (line) out += line.translateToString(true) + "\\n";
+            }
+            return out;
+        }
+        return "";
+    }""")
+    
+    assert "test_upload_file2.txt" in content, "Uploaded file name not found in terminal output"
+

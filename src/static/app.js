@@ -1546,7 +1546,13 @@
                 });
                 const result = await response.json();
                 if (result.status === 'success') {
-                    alert('File uploaded successfully');
+                    const tab = tabs.find(t => t.id === activeTabId);
+                    if (tab && tab.socket && tab.state === 'terminal') {
+                        tab.socket.emit('pty-input', {input: `> I uploaded @${result.filename} `});
+                        tab.term.focus();
+                    } else {
+                        alert('File uploaded successfully');
+                    }
                     closeFileTransfer();
                     fileInput.value = '';
                 } else {
