@@ -56,6 +56,36 @@
         let originalPageTitle = 'Gemini WebUI';
 
         let hostHealthStates = {};
+        let wakeLock = null;
+
+        async function updateWakeLock() {
+            if (!('wakeLock' in navigator)) return;
+
+            const isActive = tabs.some(t => t.title && (t.title.includes('Working') || t.title.includes('✋')));
+            
+            if (isActive && document.visibilityState === 'visible') {
+                if (!wakeLock) {
+                    try {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        wakeLock.addEventListener('release', () => {
+                            wakeLock = null;
+                        });
+                    } catch (err) {
+                        console.error(`Wake Lock error: ${err.name}, ${err.message}`);
+                    }
+                }
+            } else {
+                if (wakeLock) {
+                    wakeLock.release().then(() => { wakeLock = null; });
+                }
+            }
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                updateWakeLock();
+            }
+        });
 
         function updateHostHealthIndicator(tabId, label, isSuccess) {
             if (!hostHealthStates[label]) hostHealthStates[label] = { failures: 2 }; // Start at red
@@ -77,6 +107,7 @@
         }
 
         function updatePageTitle() {
+            updateWakeLock();
             const hasActionRequired = tabs.some(t => t.title && t.title.includes('✋'));
             const newTitle = hasActionRequired ? '✋ Gemini WebUI' : originalPageTitle;
             
@@ -1174,6 +1205,7 @@
             if (tabs.length === 0) addNewTab();
             else { if (activeTabId === id) switchTab(tabs[Math.max(0, index - 1)].id); renderTabs(); }
             saveTabsToStorage();
+            updatePageTitle();
         }
 
         function renderTabs() {
