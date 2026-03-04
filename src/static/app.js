@@ -263,6 +263,7 @@
                     const statusLabel = s.is_orphaned ? 'Orphaned' : 'Active';
                     const shortDir = s.ssh_dir ? s.ssh_dir.split('/').pop() : '';
                     const dirContext = shortDir ? `<span style="color: #0dbc79; font-weight: bold; margin-right: 5px;">[${shortDir}]</span>` : '';
+                    const lastSeenDate = s.last_active ? new Date(s.last_active * 1000).toLocaleString() : 'Unknown';
                     html += `
                         <div class="session-item" style="background: #252526; margin-bottom: 8px; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #333;">
                             <div class="session-info">
@@ -271,6 +272,10 @@
                                     <span style="color: ${statusColor}; font-weight: bold; display: flex; align-items: center; gap: 4px;">
                                         <span style="font-size: 14px;">●</span> ${statusLabel}
                                     </span> 
+                                    <span style="color: #555;">|</span>
+                                    <span class="session-id-display" style="font-family: monospace;">ID: ${s.tab_id}</span>
+                                    <span style="color: #555;">|</span>
+                                    <span class="session-last-seen-display">Last seen: ${lastSeenDate}</span>
                                 </div>
                             </div>
                             <div style="display: flex; gap: 8px;">

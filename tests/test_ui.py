@@ -220,3 +220,33 @@ def test_ui_backend_session_termination_no_refresh(page, server):
     # Verify marker is still there (no reload)
     marker = page.evaluate("window.__TEST_MARKER__")
     assert marker is True, "Page reloaded during termination!"
+
+@pytest.mark.prone_to_timeout
+@pytest.mark.timeout(20)
+def test_ui_backend_session_details_display(page, server):
+    """Verify that backend managed sessions display Session ID and Last Seen."""
+    expect(page.get_by_text("Select a Connection").first).to_be_visible(timeout=5000)
+
+    # Start a fresh local session
+    btns = page.locator('.tab-instance.active button:has-text("Start New")')
+    expect(btns.first).to_be_visible(timeout=5000)
+    btns.first.click()
+    
+    # Wait for terminal
+    expect(page.locator('#active-connection-info')).to_be_visible(timeout=5000)
+    time.sleep(1)
+    
+    # Open a new tab
+    page.locator('#new-tab-btn').click()
+    expect(page.get_by_text("Select a Connection").first).to_be_visible(timeout=5000)
+    
+    # Wait for the backend session list to load.
+    expect(page.locator('.tab-instance.active .backend-sessions-container .session-item').first).to_be_visible(timeout=5000)
+
+    # Verify ID and Last seen are visible
+    session_item = page.locator('.tab-instance.active .backend-sessions-container .session-item').first
+    expect(session_item.locator('.session-id-display')).to_be_visible(timeout=5000)
+    expect(session_item.locator('.session-id-display')).to_contain_text("ID: ")
+    expect(session_item.locator('.session-last-seen-display')).to_be_visible(timeout=5000)
+    expect(session_item.locator('.session-last-seen-display')).to_contain_text("Last seen: ")
+
