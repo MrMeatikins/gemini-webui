@@ -1,4 +1,22 @@
 
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const originalFetch = window.fetch;
+        window.fetch = function() {
+            let [resource, config] = arguments;
+            if (config === undefined) {
+                config = {};
+            }
+            if (config.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method.toUpperCase())) {
+                if (config.headers instanceof Headers) {
+                    if (csrfToken) config.headers.append('X-CSRFToken', csrfToken);
+                } else {
+                    config.headers = config.headers || {};
+                    if (csrfToken) config.headers['X-CSRFToken'] = csrfToken;
+                }
+            }
+            return originalFetch(resource, config);
+        };
+
         // PWA Service Worker Registration
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

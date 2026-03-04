@@ -23,6 +23,7 @@ from flask import Flask, render_template, request, Response, session, jsonify, s
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO
 from flask_talisman import Talisman
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 try:
     from auth_ldap import check_auth
@@ -51,6 +52,7 @@ logger = logging.getLogger(__name__)
 
 template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 app = Flask(__name__, template_folder=template_dir)
+csrf = CSRFProtect(app)
 
 try:
     with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'VERSION'), 'r') as f:
@@ -212,7 +214,8 @@ def init_app():
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SECURE=False, 
         SESSION_COOKIE_SAMESITE='Lax',
-        DATA_DIR=data_dir
+        DATA_DIR=data_dir,
+        WTF_CSRF_ENABLED=not app.config.get('TESTING', False)
     )
     return config
 
