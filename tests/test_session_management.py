@@ -5,20 +5,32 @@ import signal
 from unittest.mock import patch
 from src.app import app, init_app, session_manager, Session
 
+@pytest.fixture(autouse=True)
+def setup_teardown():
+    session_manager.sessions.clear()
+    session_manager.sid_to_tabid.clear()
+    session_manager.tabid_to_sid.clear()
+    yield
+    session_manager.sessions.clear()
+    session_manager.sid_to_tabid.clear()
+    session_manager.tabid_to_sid.clear()
+
 @pytest.fixture
-def client(test_data_dir):
+def client(test_data_dir, monkeypatch):
     app.config['TESTING'] = True
     app.config['DATA_DIR'] = str(test_data_dir)
     app.config['BYPASS_AUTH_FOR_TESTING'] = 'true'
-    os.environ['BYPASS_AUTH_FOR_TESTING'] = 'true'
-    app.config['SECRET_KEY'] = 'test-secret-key'
+    monkeypatch.setenv('BYPASS_AUTH_FOR_TESTING', 'true')
+    app.config['WTF_CSRF_ENABLED'] = False
+    
     # Force initialization to set up globals and paths
     with app.app_context():
         init_app()
     with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['authenticated'] = True
+            sess['user_id'] = 'admin'
         yield client
-    # Cleanup env
-    os.environ.pop('BYPASS_AUTH_FOR_TESTING', None)
 
 def test_list_management_sessions(client):
     # Add a mock session

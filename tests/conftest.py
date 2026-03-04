@@ -74,13 +74,14 @@ def app_obj(test_data_dir):
 
 @pytest.fixture
 def client(test_data_dir):
-    import sys
-    if 'src.app' in sys.modules:
-        import importlib
-        importlib.reload(sys.modules['src.app'])
+    from src.app import app, init_app
     
     app.config['TESTING'] = True
     app.config['BYPASS_AUTH_FOR_TESTING'] = 'true'
+    app.config['WTF_CSRF_ENABLED'] = False
+    os.environ['BYPASS_AUTH_FOR_TESTING'] = 'true'
+    os.environ['WTF_CSRF_ENABLED'] = 'false'
+    app.config['SECRET_KEY'] = 'test-secret-key'
     app.config['DATA_DIR'] = str(test_data_dir)
     
     init_app()
@@ -89,4 +90,5 @@ def client(test_data_dir):
         with app.app_context():
             with client.session_transaction() as sess:
                 sess['authenticated'] = True
+                sess['user_id'] = 'admin'
         yield client
