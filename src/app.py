@@ -887,7 +887,7 @@ def upload_file():
     if not filename:
         return jsonify({"status": "error", "message": "Invalid filename"}), 400
 
-    workspace_dir = os.environ.get("DATA_DIR", "/data")
+    workspace_dir = os.path.join(os.environ.get("DATA_DIR", "/data"), "workspace")
     
     # Ensure save path is within workspace
     base_path = os.path.abspath(workspace_dir)
@@ -902,7 +902,7 @@ def upload_file():
 @app.route('/api/download/<path:filename>', methods=['GET'])
 @authenticated_only
 def download_file(filename):
-    workspace_dir = os.environ.get("DATA_DIR", "/data")
+    workspace_dir = os.path.join(os.environ.get("DATA_DIR", "/data"), "workspace")
     
     # Securely resolve the path and prevent directory traversal
     try:

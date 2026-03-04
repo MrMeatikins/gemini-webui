@@ -13,11 +13,11 @@ def test_upload_file_subdirectory(client, test_data_dir):
     resp_data = json.loads(response.data)
     assert resp_data['status'] == 'success'
     
-    save_path = os.path.join(test_data_dir, 'subfolder/testfile.txt')
+    save_path = os.path.join(test_data_dir, 'workspace/subfolder/testfile.txt')
     assert os.path.exists(save_path), "File should be saved in subfolder"
 
 def test_download_file_subdirectory(client, test_data_dir):
-    save_dir = os.path.join(test_data_dir, 'subfolder')
+    save_dir = os.path.join(test_data_dir, 'workspace/subfolder')
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, 'download_test.txt')
     with open(save_path, 'wb') as f:
