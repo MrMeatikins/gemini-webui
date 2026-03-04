@@ -26,8 +26,8 @@ def test_upload_file_success(client, test_data_dir):
     assert resp_data['status'] == 'success'
     assert resp_data['filename'] == 'testfile.txt'
 
-    # Verify file is saved in DATA_DIR
-    save_path = os.path.join(test_data_dir, 'testfile.txt')
+    # Verify file is saved in DATA_DIR/workspace
+    save_path = os.path.join(test_data_dir, 'workspace', 'testfile.txt')
     assert os.path.exists(save_path)
     with open(save_path, 'rb') as f:
         assert f.read() == b"test content"
@@ -39,8 +39,10 @@ def test_upload_file_no_file(client):
     assert resp_data['message'] == 'No file part'
 
 def test_download_file_success(client, test_data_dir):
-    # Setup file
-    save_path = os.path.join(test_data_dir, 'download_test.txt')
+    # Setup file in workspace
+    workspace_dir = os.path.join(test_data_dir, 'workspace')
+    os.makedirs(workspace_dir, exist_ok=True)
+    save_path = os.path.join(workspace_dir, 'download_test.txt')
     with open(save_path, 'wb') as f:
         f.write(b"download content")
 
