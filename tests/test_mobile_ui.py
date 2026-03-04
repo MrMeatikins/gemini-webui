@@ -278,3 +278,16 @@ def test_pull_to_refresh_functional(mobile_page):
     # canary = mobile_page.evaluate("window.reload_canary")
     # assert canary is None, "Page did NOT reload during downward swipe!"
 
+@pytest.mark.timeout(20)
+def test_mobile_connection_button_size(mobile_page):
+    """Verify that connection action buttons are reduced in size on mobile."""
+    mobile_page.wait_for_selector(".connection-actions button", timeout=10000)
+    
+    button_max_width = mobile_page.evaluate("""() => {
+        const btn = document.querySelector('.connection-actions button');
+        return window.getComputedStyle(btn).getPropertyValue('max-width');
+    }""")
+    
+    assert button_max_width != 'none', f"max-width should be set, but got {button_max_width}"
+
+
