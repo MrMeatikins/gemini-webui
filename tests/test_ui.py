@@ -106,7 +106,21 @@ def test_fresh_session_no_reclaim_warning(page, server):
     expect(page.locator('#active-connection-info')).to_be_visible(timeout=5000)
     
     # Wait for the welcome message to appear, which indicates successful connection
-    expect(page.locator('.xterm-rows')).to_contain_text("Welcome to Fake Gemini", timeout=15000)
+    page.wait_for_timeout(5000)
+    content_text = page.evaluate("""() => {
+        const tab = tabs.find(t => t.id === activeTabId);
+        if (tab && tab.term) {
+            let out = "";
+            for (let i = 0; i < 5; i++) {
+                const line = tab.term.buffer.active.getLine(i);
+                if (line) out += line.translateToString() + "\\n";
+            }
+            return out;
+        }
+        return "";
+    }""")
+    print("TERMINAL:", repr(content_text))
+    assert "Welcome to Fake Gemini" in content_text
 
     # Now that we've received the welcome message, verify there's no reclaim warning
     content = page.evaluate("""() => {

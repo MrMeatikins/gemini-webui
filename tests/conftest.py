@@ -17,7 +17,9 @@ def server(test_data_dir):
     env = os.environ.copy()
     env["BYPASS_AUTH_FOR_TESTING"] = "true"
     env["SECRET_KEY"] = "testsecret"
-    env["PORT"] = "5005"
+    import random
+    port = str(random.randint(5000, 9000))
+    env["PORT"] = port
     env["ALLOWED_ORIGINS"] = "*"
     env["DATA_DIR"] = str(test_data_dir)
     env["GEMINI_BIN"] = "gemini"
@@ -29,7 +31,6 @@ def server(test_data_dir):
     mock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock")
     env["PATH"] = f"{mock_dir}:{env.get('PATH', '')}"
     
-    port = "5005"
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     python_bin = os.path.join(project_root, ".venv", "bin", "python")
     
