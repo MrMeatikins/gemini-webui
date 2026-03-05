@@ -214,8 +214,8 @@ def test_mobile_resume_specific(custom_mobile_page):
     assert found, f"Expected 'MOCK_EXECUTED: -r 1' not found in terminal content: {content2}"
 
 @pytest.mark.timeout(20)
-def test_mobile_keyboard_scroll_prevention(mobile_page):
-    """Verify that body and html have overflow: hidden to prevent black block scrolling when keyboard opens."""
+def test_mobile_pull_to_refresh_enabled(mobile_page):
+    """Verify that body and html have overflow: visible to allow native pull-to-refresh on mobile."""
     # Start a session to be in terminal mode
     mobile_page.click("text=Start New")
     mobile_page.wait_for_selector(".terminal-instance", timeout=10000)
@@ -224,15 +224,14 @@ def test_mobile_keyboard_scroll_prevention(mobile_page):
     body_overflow = mobile_page.evaluate("window.getComputedStyle(document.body).getPropertyValue('overflow')")
     body_overscroll = mobile_page.evaluate("window.getComputedStyle(document.body).getPropertyValue('overscroll-behavior')")
     
-    # Due to 'overflow: hidden' mapping to 'overflow-x: hidden' and 'overflow-y: hidden' in some browsers,
-    # we just check that it contains 'hidden' or evaluates to it.
-    assert 'hidden' in body_overflow
-    
+    # Due to 'overflow: visible' allowing native PTR
+    # we just check that it contains 'visible' or evaluates to it.
+    assert 'visible' in body_overflow
+
     # Check html styles
     html_overflow = mobile_page.evaluate("window.getComputedStyle(document.documentElement).getPropertyValue('overflow')")
-    
-    assert 'hidden' in html_overflow
 
+    assert 'visible' in html_overflow
 @pytest.mark.timeout(20)
 def test_pull_to_refresh_styles(mobile_page):
     """Verify that overscroll-behavior is NOT none for body, html, and #toolbar on mobile."""
@@ -251,44 +250,6 @@ def test_pull_to_refresh_styles(mobile_page):
     # Toolbar might still have it if we decided to block it there, but user said NO difference.
     # toolbar_overscroll = mobile_page.evaluate("window.getComputedStyle(document.getElementById('toolbar')).getPropertyValue('overscroll-behavior')")
     # assert 'none' not in toolbar_overscroll
-
-@pytest.mark.timeout(20)
-def test_pull_to_refresh_functional(mobile_page):
-    """Verify functionally that a downward swipe triggers a page reload."""
-    # Start a session
-    mobile_page.click("text=Start New")
-    mobile_page.wait_for_selector(".terminal-instance", timeout=10000)
-    
-    # Set a canary variable on the window object
-    mobile_page.evaluate("window.reload_canary = 'still_here'")
-    
-    # Simulate a downward swipe starting from the toolbar using touch events
-    mobile_page.evaluate("""() => {
-        const toolbar = document.getElementById('toolbar');
-        if (!toolbar) return;
-        
-        // Touch start
-        const touch1 = new Touch({ identifier: 1, target: toolbar, clientX: 200, clientY: 10, pageX: 200, pageY: 10 });
-        const startEvent = new TouchEvent('touchstart', {
-            touches: [touch1], targetTouches: [touch1], changedTouches: [touch1],
-            bubbles: true, cancelable: true
-        });
-        toolbar.dispatchEvent(startEvent);
-        
-        // Touch move down by 200px
-        const touch2 = new Touch({ identifier: 1, target: toolbar, clientX: 200, clientY: 210, pageX: 200, pageY: 210 });
-        const moveEvent = new TouchEvent('touchmove', {
-            touches: [touch2], targetTouches: [touch2], changedTouches: [touch2],
-            bubbles: true, cancelable: true
-        });
-        document.dispatchEvent(moveEvent);
-    }""")
-    
-    # Wait a moment for reload to trigger
-    mobile_page.wait_for_timeout(2000)
-    
-    canary = mobile_page.evaluate("window.reload_canary")
-    assert canary is None, "Page did NOT reload during downward swipe!"
 
 @pytest.mark.timeout(20)
 def test_mobile_connection_button_size(mobile_page):

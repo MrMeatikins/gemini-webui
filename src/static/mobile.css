@@ -60,6 +60,8 @@
 .is-mobile #active-connection-info { gap: 5px; }
 
 html, body {
+    overflow: visible !important;
+    overscroll-behavior-y: auto !important;
 }
 
 /* Adjust connection action buttons size on mobile */

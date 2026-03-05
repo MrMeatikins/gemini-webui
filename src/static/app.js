@@ -203,54 +203,6 @@
         const isMobile = checkMobile();
         if (isMobile) {
             document.documentElement.classList.add('is-mobile');
-            
-            // Manual Pull-to-Refresh for mobile (since overflow: hidden breaks native PTR)
-            let ptrStartY = 0;
-            let ptrStartX = 0;
-            let isPTR = false;
-            let isHorizontalScroll = false;
-            
-            document.addEventListener('touchstart', (e) => {
-                const target = e.target;
-                if ((target.closest('#toolbar') || target.closest('#tab-bar')) && e.touches.length === 1) {
-                    ptrStartY = e.touches[0].clientY;
-                    ptrStartX = e.touches[0].clientX;
-                    isPTR = true;
-                    isHorizontalScroll = false;
-                } else {
-                    isPTR = false;
-                }
-            }, {passive: true});
-            
-            document.addEventListener('touchmove', (e) => {
-                if (!isPTR || e.touches.length !== 1) return;
-                
-                const currentY = e.touches[0].clientY;
-                const currentX = e.touches[0].clientX;
-                const deltaY = currentY - ptrStartY;
-                const deltaX = Math.abs(currentX - ptrStartX);
-                
-                if (!isHorizontalScroll && deltaX > 10 && deltaX > Math.abs(deltaY)) {
-                    isHorizontalScroll = true;
-                    isPTR = false;
-                    return;
-                }
-                
-                if (isHorizontalScroll) return;
-                
-                if (deltaY > 0) {
-                    if (e.cancelable) e.preventDefault(); // Stop native rubber-banding
-                    if (deltaY > 150) {
-                        isPTR = false;
-                        location.reload();
-                    }
-                } else if (deltaY < 0) {
-                    isPTR = false;
-                }
-            }, {passive: false});
-            
-            document.addEventListener('touchend', () => { isPTR = false; isHorizontalScroll = false; });
-            document.addEventListener('touchcancel', () => { isPTR = false; isHorizontalScroll = false; });
         }
         // console.log("Environment detection: isMobile =", isMobile, "(UA:", navigator.userAgent, "Width:", window.innerWidth, "Touch:", ('ontouchstart' in window || navigator.maxTouchPoints > 0), ")");
         
