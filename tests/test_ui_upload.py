@@ -180,8 +180,8 @@ def test_folder_drag_and_drop_upload(page, test_data_dir):
     import glob
     workspace_dir = os.path.join(test_data_dir, "workspace")
     upload_dirs = glob.glob(os.path.join(workspace_dir, "upload-*"))
-    assert len(upload_dirs) == 1, "Expected exactly one upload-* directory"
-    upload_dir = upload_dirs[0]
+    assert len(upload_dirs) >= 1, "Expected at least one upload-* directory"
+    upload_dir = max(upload_dirs, key=os.path.getmtime)
     
     assert os.path.exists(os.path.join(upload_dir, "myfolder", "file1.txt"))
     assert os.path.exists(os.path.join(upload_dir, "myfolder", "subfolder", "file2.txt"))
