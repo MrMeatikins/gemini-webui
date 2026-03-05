@@ -289,8 +289,8 @@ def test_pull_to_refresh_functional(mobile_page):
     mobile_page.mouse.up()
     
     # mobile_page.wait_for_timeout(2000)
-    # canary = mobile_page.evaluate("window.reload_canary")
-    # assert canary is None, "Page did NOT reload during downward swipe!"
+    canary = mobile_page.evaluate("window.reload_canary")
+    assert canary is None, "Page did NOT reload during downward swipe!"
 
 @pytest.mark.timeout(20)
 def test_mobile_connection_button_size(mobile_page):

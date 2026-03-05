@@ -203,6 +203,30 @@
         const isMobile = checkMobile();
         if (isMobile) {
             document.documentElement.classList.add('is-mobile');
+            
+            // Manual Pull-to-Refresh for mobile (since overflow: hidden breaks native PTR)
+            let ptrStartY = 0;
+            let isPTR = false;
+            
+            document.addEventListener('pointerdown', (e) => {
+                if ((e.target.closest('#toolbar') || e.target.closest('#tab-bar')) && e.isPrimary) {
+                    ptrStartY = e.clientY;
+                    isPTR = true;
+                } else {
+                    isPTR = false;
+                }
+            }, {passive: true});
+            
+            document.addEventListener('pointermove', (e) => {
+                if (!isPTR || !e.isPrimary) return;
+                if (e.clientY - ptrStartY > 150) {
+                    isPTR = false;
+                    location.reload();
+                }
+            }, {passive: true});
+            
+            document.addEventListener('pointerup', () => { isPTR = false; });
+            document.addEventListener('pointercancel', () => { isPTR = false; });
         }
         // console.log("Environment detection: isMobile =", isMobile, "(UA:", navigator.userAgent, "Width:", window.innerWidth, "Touch:", ('ontouchstart' in window || navigator.maxTouchPoints > 0), ")");
         
