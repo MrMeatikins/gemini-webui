@@ -206,27 +206,51 @@
             
             // Manual Pull-to-Refresh for mobile (since overflow: hidden breaks native PTR)
             let ptrStartY = 0;
+            let ptrStartX = 0;
             let isPTR = false;
+            let isHorizontalScroll = false;
             
-            document.addEventListener('pointerdown', (e) => {
-                if ((e.target.closest('#toolbar') || e.target.closest('#tab-bar')) && e.isPrimary) {
-                    ptrStartY = e.clientY;
+            document.addEventListener('touchstart', (e) => {
+                const target = e.target;
+                if ((target.closest('#toolbar') || target.closest('#tab-bar')) && e.touches.length === 1) {
+                    ptrStartY = e.touches[0].clientY;
+                    ptrStartX = e.touches[0].clientX;
                     isPTR = true;
+                    isHorizontalScroll = false;
                 } else {
                     isPTR = false;
                 }
             }, {passive: true});
             
-            document.addEventListener('pointermove', (e) => {
-                if (!isPTR || !e.isPrimary) return;
-                if (e.clientY - ptrStartY > 150) {
+            document.addEventListener('touchmove', (e) => {
+                if (!isPTR || e.touches.length !== 1) return;
+                
+                const currentY = e.touches[0].clientY;
+                const currentX = e.touches[0].clientX;
+                const deltaY = currentY - ptrStartY;
+                const deltaX = Math.abs(currentX - ptrStartX);
+                
+                if (!isHorizontalScroll && deltaX > 10 && deltaX > Math.abs(deltaY)) {
+                    isHorizontalScroll = true;
                     isPTR = false;
-                    location.reload();
+                    return;
                 }
-            }, {passive: true});
+                
+                if (isHorizontalScroll) return;
+                
+                if (deltaY > 0) {
+                    if (e.cancelable) e.preventDefault(); // Stop native rubber-banding
+                    if (deltaY > 150) {
+                        isPTR = false;
+                        location.reload();
+                    }
+                } else if (deltaY < 0) {
+                    isPTR = false;
+                }
+            }, {passive: false});
             
-            document.addEventListener('pointerup', () => { isPTR = false; });
-            document.addEventListener('pointercancel', () => { isPTR = false; });
+            document.addEventListener('touchend', () => { isPTR = false; isHorizontalScroll = false; });
+            document.addEventListener('touchcancel', () => { isPTR = false; isHorizontalScroll = false; });
         }
         // console.log("Environment detection: isMobile =", isMobile, "(UA:", navigator.userAgent, "Width:", window.innerWidth, "Touch:", ('ontouchstart' in window || navigator.maxTouchPoints > 0), ")");
         
@@ -635,12 +659,13 @@
             recreateTerminalUI(tab, true);
         }
 
-        async function fetchSessions(tabId, conn, targetId, forceAll = false, useCache = false) {
+        async function fetchSessions(tabId, conn, targetId, forceAll = false, useCache = false, isPolling = false) {
             const query = new URLSearchParams();
             if (conn.type === 'ssh') { query.set('ssh_target', conn.target); if (conn.dir) query.set('ssh_dir', conn.dir); }
             if (useCache) query.set('cache', 'true');
+            query.set('bg', 'true'); // ALWAYS use background fetching to avoid blocking server
 
-            if (!useCache) {
+            if (!useCache && !isPolling) {
                 const pulseId = `${tabId}_pulse_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
                 const pulseEl = document.getElementById(pulseId);
                 if (pulseEl) {
@@ -654,17 +679,26 @@
                 const response = await fetch('/api/sessions?' + query.toString());
                 if (!response.ok) throw new Error("HTTP error " + response.status);
                 const data = await response.json();
-                
-                if (!useCache) updateHostHealthIndicator(tabId, conn.label, !data.error);
+
+                if (data.status === "fetching") {
+                    const listEl = document.getElementById(targetId);
+                    if (listEl && listEl.innerHTML === '') {
+                        listEl.innerHTML = `<div style="padding: 10px; color: #888; font-size: 11px;">Fetching sessions...</div>`;
+                    }
+                    setTimeout(() => fetchSessions(tabId, conn, targetId, forceAll, true, true), 1000);
+                    return;
+                }
+
+                if (!useCache || isPolling) updateHostHealthIndicator(tabId, conn.label, !data.error);
 
                 const listEl = document.getElementById(targetId); if (!listEl) return;
-                if (data.error) { 
+                if (data.error) {
                     let errorHtml = `<div style="padding: 10px; color: #f14c4c; font-size: 11px;">Error: ${data.error}</div>`;
                     if (data.error.toLowerCase().includes('permission denied') || data.error.toLowerCase().includes('publickey')) {
                         errorHtml += `<div style="padding: 0 10px 10px 10px;"><button class="small primary" onclick="openSettings()">Setup Keys</button></div>`;
                     }
-                    listEl.innerHTML = errorHtml; 
-                    return; 
+                    listEl.innerHTML = errorHtml;
+                    return;
                 }
                 const sessions = parseSessions(data.output || "");
                 if (sessions.length === 0) { listEl.innerHTML = `<div style="padding: 10px; color: #666; font-size: 11px; padding-left: 15px;">No active sessions found.</div>`; }
@@ -689,13 +723,12 @@
                     if (!forceAll && sorted.length > 3) html += `<div class="session-item" style="justify-content: center; background: #252526; cursor: pointer;" onclick="fetchSessions('${tabId}', ${JSON.stringify(conn).replace(/"/g, '&quot;')}, '${targetId}', true, false)"><div style="font-size: 11px; color: #2472c8; font-weight: bold;">... Show ${sorted.length - 3} more</div></div>`;
                     listEl.innerHTML = html + '</div>';
                 }
-                if (useCache) fetchSessions(tabId, conn, targetId, forceAll, false); // Update after cache load
-            } catch (e) { 
-                if (!useCache) updateHostHealthIndicator(tabId, conn.label, false);
-                console.error(e); 
+                if (useCache && !isPolling) fetchSessions(tabId, conn, targetId, forceAll, false); // Update after cache load
+            } catch (e) {
+                if (!useCache || isPolling) updateHostHealthIndicator(tabId, conn.label, false);
+                console.error(e);
             }
         }
-
         function parseSessions(output) {
             const sessions = []; const lines = output.split('\n');
             lines.forEach(line => {
@@ -1239,7 +1272,13 @@
 
         function closeTab(id, event) {
             if (event) event.stopPropagation(); const index = tabs.findIndex(t => t.id === id); if (index === -1) return;
-            const tab = tabs[index]; if (tab.socket) tab.socket.disconnect(); if (tab.term) tab.term.dispose();
+            const tab = tabs[index];
+            if (tab.state === 'launcher') return; // Cannot close the launcher (+ New) tab
+            if (tab.socket) tab.socket.disconnect(); 
+            if (tab.webglAddon) {
+                try { tab.webglAddon.dispose(); } catch(e) {}
+            }
+            if (tab.term) tab.term.dispose();
             const inst = document.getElementById(id + '_instance'); if (inst) inst.remove();
             tabs.splice(index, 1);
             if (tabs.length === 0) addNewTab();
@@ -1252,7 +1291,7 @@
             const bar = document.getElementById('tab-bar'); bar.innerHTML = '';
             tabs.forEach(tab => {
                 const el = document.createElement('div'); el.id = 'nav-' + tab.id; el.className = 'tab' + (tab.id === activeTabId ? ' active' : ''); el.onclick = () => switchTab(tab.id);
-                el.innerHTML = `<span>${tab.title}</span><span class="tab-close" onclick="closeTab('${tab.id}', event)">&times;</span>`;
+                el.innerHTML = `<span>${tab.title}</span>` + (tab.state === 'launcher' ? '' : `<span class="tab-close" onclick="closeTab('${tab.id}', event)">&times;</span>`);
                 bar.appendChild(el);
             });
         }

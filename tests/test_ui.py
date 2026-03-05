@@ -84,8 +84,11 @@ def test_ui_tab_management(page):
     page.locator('#new-tab-btn').click()
     expect(page.locator('.tab')).to_have_count(initial_tabs + 1)
     
-    # Close tab
-    page.locator('.tab-close').last.click()
+    # Verify the launcher tab does not have a close button
+    expect(page.locator('.tab').last.locator('.tab-close')).to_have_count(0)
+    
+    # Close the first tab (terminal)
+    page.locator('.tab-close').first.click()
     expect(page.locator('.tab')).to_have_count(initial_tabs)
 import pytest
 

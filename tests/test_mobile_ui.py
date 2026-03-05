@@ -262,33 +262,31 @@ def test_pull_to_refresh_functional(mobile_page):
     # Set a canary variable on the window object
     mobile_page.evaluate("window.reload_canary = 'still_here'")
     
-    # Simulate a downward swipe starting from the toolbar
-    # Coordinates for Pixel 5: Width 393, Height 851. Toolbar is at the top.
-    # Swipe from (200, 10) to (200, 400)
-    mobile_page.mouse.move(200, 10)
-    mobile_page.mouse.down()
-    mobile_page.mouse.move(200, 400, steps=20)
-    mobile_page.mouse.up()
+    # Simulate a downward swipe starting from the toolbar using touch events
+    mobile_page.evaluate("""() => {
+        const toolbar = document.getElementById('toolbar');
+        if (!toolbar) return;
+        
+        // Touch start
+        const touch1 = new Touch({ identifier: 1, target: toolbar, clientX: 200, clientY: 10, pageX: 200, pageY: 10 });
+        const startEvent = new TouchEvent('touchstart', {
+            touches: [touch1], targetTouches: [touch1], changedTouches: [touch1],
+            bubbles: true, cancelable: true
+        });
+        toolbar.dispatchEvent(startEvent);
+        
+        // Touch move down by 200px
+        const touch2 = new Touch({ identifier: 1, target: toolbar, clientX: 200, clientY: 210, pageX: 200, pageY: 210 });
+        const moveEvent = new TouchEvent('touchmove', {
+            touches: [touch2], targetTouches: [touch2], changedTouches: [touch2],
+            bubbles: true, cancelable: true
+        });
+        document.dispatchEvent(moveEvent);
+    }""")
     
     # Wait a moment for reload to trigger
-    # In headless chromium, pull-to-refresh might not be fully emulated, 
-    # but we can check if it stays or reloads.
-    # NOTE: If playwright doesn't trigger pull-to-refresh natively, we might need a different check.
-    # However, removing overscroll-behavior: none is the primary goal.
     mobile_page.wait_for_timeout(2000)
     
-    # In many headless environments, mouse swipe doesn't trigger PWA pull-to-refresh
-    # but we verify that we haven't BLOCKED it.
-    # Actually, if we want to BE SURE it reloads, we might need to use touch events.
-    
-    mobile_page.touchscreen.tap(200, 10)
-    # Simulate touch swipe
-    mobile_page.mouse.move(200, 10)
-    mobile_page.mouse.down()
-    mobile_page.mouse.move(200, 600, steps=50)
-    mobile_page.mouse.up()
-    
-    # mobile_page.wait_for_timeout(2000)
     canary = mobile_page.evaluate("window.reload_canary")
     assert canary is None, "Page did NOT reload during downward swipe!"
 

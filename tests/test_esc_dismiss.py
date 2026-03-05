@@ -79,7 +79,7 @@ def test_esc_dismiss_launcher(page):
     # Press Escape
     page.keyboard.press("Escape")
     
-    # Verify the launcher tab is closed and we are back to the terminal
-    expect(page.locator('.tab')).to_have_count(tabs_count - 1, timeout=5000)
-    expect(page.locator('#active-connection-info')).to_be_visible(timeout=5000)
-    expect(page.locator('.terminal-instance').first).to_be_visible(timeout=5000)
+    # Verify the launcher tab is NOT closed (as per new requirements)
+    page.wait_for_timeout(1000) # wait to ensure no close happens
+    expect(page.locator('.tab')).to_have_count(tabs_count)
+    expect(page.locator('.launcher').first).to_be_visible()

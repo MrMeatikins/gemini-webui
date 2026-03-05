@@ -592,12 +592,37 @@ def list_gemini_sessions():
     ssh_target = request.args.get('ssh_target')
     ssh_dir = request.args.get('ssh_dir')
     cache_key = f"{'ssh' if ssh_target else 'local'}:{ssh_target or 'local'}:{ssh_dir or ''}"
-    
+
     # Check if we should update or use cache
     use_cache = request.args.get('cache') == 'true'
+    bg = request.args.get('bg') == 'true'
+
     if use_cache and cache_key in session_results_cache:
         return jsonify(session_results_cache[cache_key])
-    
+
+    if bg:
+        if not hasattr(list_gemini_sessions, 'fetching_locks'):
+            list_gemini_sessions.fetching_locks = set()
+
+        if cache_key not in list_gemini_sessions.fetching_locks:
+            list_gemini_sessions.fetching_locks.add(cache_key)
+
+            def background_fetch(target, directory, key):
+                try:
+                    _, _, ssh_dir_path = get_config_paths()
+                    res = fetch_sessions_for_host({'target': target, 'dir': directory, 'type': 'ssh' if target else 'local'}, ssh_dir_path, GEMINI_BIN)
+                    session_results_cache[key] = res
+                except Exception as e:
+                    logger.error(f"Background fetch error: {e}")
+                    session_results_cache[key] = {"error": str(e)}
+                finally:
+                    if key in list_gemini_sessions.fetching_locks:
+                        list_gemini_sessions.fetching_locks.remove(key)
+
+            socketio.start_background_task(background_fetch, ssh_target, ssh_dir, cache_key)
+
+        return jsonify({"status": "fetching"})
+
     _, _, ssh_dir_path = get_config_paths()
     result = fetch_sessions_for_host({'target': ssh_target, 'dir': ssh_dir, 'type': 'ssh' if ssh_target else 'local'}, ssh_dir_path, GEMINI_BIN)
     err = result.get('error')
@@ -605,7 +630,6 @@ def list_gemini_sessions():
         return jsonify(result), 504
     session_results_cache[cache_key] = result
     return jsonify(result)
-
 @app.route('/api/hosts', methods=['POST'])
 @authenticated_only
 def add_host():
