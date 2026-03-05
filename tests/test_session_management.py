@@ -73,3 +73,42 @@ def test_terminate_managed_session_not_found(client):
     assert response.status_code == 404
     data = json.loads(response.data)
     assert "error" in data
+
+def test_resume_new_local():
+    from src.process_manager import build_terminal_command
+    from unittest.mock import patch
+    
+    with patch('src.process_manager.fetch_sessions_for_host') as mock_fetch:
+        mock_fetch.return_value = {
+            "output": "  1. Session A (date)\n  3. Session B (date)\n",
+            "error": None
+        }
+        cmd = build_terminal_command(None, None, 'new', '/tmp/ssh')
+        cmd_str = " ".join(cmd)
+        assert "gemini -r 4" in cmd_str
+
+def test_resume_new_ssh():
+    from src.process_manager import build_terminal_command
+    from unittest.mock import patch
+    
+    with patch('src.process_manager.fetch_sessions_for_host') as mock_fetch:
+        mock_fetch.return_value = {
+            "output": "  5. Session (date)\n",
+            "error": None
+        }
+        cmd = build_terminal_command("user@host", "~", 'new', '/tmp/ssh')
+        cmd_str = " ".join(cmd)
+        assert "gemini -r 6" in cmd_str
+
+def test_resume_new_no_sessions():
+    from src.process_manager import build_terminal_command
+    from unittest.mock import patch
+    
+    with patch('src.process_manager.fetch_sessions_for_host') as mock_fetch:
+        mock_fetch.return_value = {
+            "output": "",
+            "error": None
+        }
+        cmd = build_terminal_command("user@host", "~", 'new', '/tmp/ssh')
+        cmd_str = " ".join(cmd)
+        assert "gemini -r 1" in cmd_str

@@ -116,6 +116,14 @@ def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin
         gemini_base_cmd = gemini_bin
         if resume is True or str(resume).lower() == 'true':
             gemini_base_cmd += " -r"
+        elif str(resume).lower() == 'new':
+            host = {'target': ssh_target, 'dir': ssh_dir}
+            sessions_data = fetch_sessions_for_host(host, ssh_dir_path, gemini_bin)
+            sessions_out = sessions_data.get("output", "") if isinstance(sessions_data, dict) else ""
+            import re
+            ids = [int(m.group(1)) for m in re.finditer(r'^\s+(\d+)\.\s+', sessions_out, re.MULTILINE)]
+            next_id = max(ids) + 1 if ids else 1
+            gemini_base_cmd += f" -r {next_id}"
         elif resume and str(resume).lower() != 'false':
             gemini_base_cmd += f" -r {resume}"
         
@@ -168,6 +176,14 @@ def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin
         gemini_cmd = gemini_bin
         if resume is True or str(resume).lower() == 'true':
             gemini_cmd += " -r"
+        elif str(resume).lower() == 'new':
+            host = {'target': None, 'dir': None}
+            sessions_data = fetch_sessions_for_host(host, ssh_dir_path, gemini_bin)
+            sessions_out = sessions_data.get("output", "") if isinstance(sessions_data, dict) else ""
+            import re
+            ids = [int(m.group(1)) for m in re.finditer(r'^\s+(\d+)\.\s+', sessions_out, re.MULTILINE)]
+            next_id = max(ids) + 1 if ids else 1
+            gemini_cmd += f" -r {next_id}"
         elif resume and str(resume).lower() != 'false':
             gemini_cmd += f" -r {resume}"
         cmd = ['/bin/sh', '-c', f"{setup_cmd} exec {gemini_cmd}"]

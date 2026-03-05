@@ -466,7 +466,7 @@
                             <div style="font-size: 11px; font-family: monospace; color: #888; opacity: 0.8;">${conn.target || 'local'} ${conn.dir || ''}</div>
                         </div>
                         <div class="connection-actions">
-                            <button class="primary" onclick="startSession('${id}', '${conn.type}', '${conn.target || ''}', '${conn.dir || ''}', false)">Start New</button>
+                            <button class="primary" onclick="startSession('${id}', '${conn.type}', '${conn.target || ''}', '${conn.dir || ''}', 'new')">Start New</button>
                             <button class="success" onclick="startSession('${id}', '${conn.type}', '${conn.target || ''}', '${conn.dir || ''}', true)">Resume Latest</button>
                         </div>
                     </div>
@@ -1004,13 +1004,9 @@
             
             let disconnectTime = null;
             tab.socket.on('connect', () => {
-                if (disconnectTime && (Date.now() - disconnectTime > 5000)) {
-                    // console.log("Significant downtime detected, reloading page...");
-                    location.reload();
-                    return;
-                }
                 disconnectTime = null;
                 tab.term.write('\r\n\x1b[2m[Connected to server]\x1b[0m\r\n');
+                updateStatus(tab.session.ssh_target, tab.session.ssh_dir); // Restore correct status
                 tab.socket.emit('restart', { 
                     tab_id: tabId, 
                     reclaim: tab.shouldReclaim,
@@ -1028,6 +1024,11 @@
             tab.socket.on('disconnect', (reason) => {
                 disconnectTime = Date.now();
                 tab.term.write('\r\n\x1b[1;33m[Connection lost: ' + reason + '. Attempting to reconnect...]\x1b[0m\r\n');
+                const statusEl = document.getElementById('connection-status');
+                if (statusEl) {
+                    statusEl.innerText = 'Reconnecting...';
+                    statusEl.style.color = '#e5e510'; // yellow
+                }
                 if (reason === "io server disconnect") {
                     tab.socket.connect();
                 }
@@ -1044,24 +1045,12 @@
             });
 
             tab.socket.on('reconnect_error', (error) => {
-                // console.log('Reconnection error:', error);
-                // If we get a 502 (Bad Gateway) or other connection errors, the server is likely restarting
-                // We should reload to get a fresh state once it's back, but throttle it.
-                if (error && (error.message === "xhr poll error" || error.description === 502 || error.type === "TransportError")) {
-                    // console.log("Connection error detected, scheduling reload...");
-                    if (!reloadTimeout) {
-                        reloadTimeout = setTimeout(() => {
-                            location.reload();
-                        }, 5000);
-                    }
-                }
+                // Keep retrying
             });
 
             tab.socket.on('reconnect_failed', () => {
-                tab.term.write('\r\n\x1b[1;31m[Reconnection failed. Refreshing page in 5 seconds...]\x1b[0m\r\n');
-                setTimeout(() => {
-                    location.reload();
-                }, 5000);
+                tab.term.write('\r\n\x1b[1;31m[Reconnection failed. Will keep trying...]\x1b[0m\r\n');
+                tab.socket.connect();
             });
 
             tab.socket.on('pty-output', (data) => { 
