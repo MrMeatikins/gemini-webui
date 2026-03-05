@@ -88,12 +88,13 @@
         });
 
         function updateHostHealthIndicator(tabId, label, isSuccess) {
-            if (!hostHealthStates[label]) hostHealthStates[label] = { failures: 2 }; // Start at red
+            if (!hostHealthStates[label]) hostHealthStates[label] = { failures: -1 }; // Start at unknown
             
             if (isSuccess) {
                 hostHealthStates[label].failures = 0;
             } else {
-                hostHealthStates[label].failures++;
+                if (hostHealthStates[label].failures < 0) hostHealthStates[label].failures = 2;
+                else hostHealthStates[label].failures++;
             }
 
             const indicatorId = `${tabId}_health_${label.replace(/[^a-z0-9]/gi, '')}`;
@@ -102,6 +103,7 @@
                 const f = hostHealthStates[label].failures;
                 if (f === 0) el.innerText = '🟢';
                 else if (f === 1) el.innerText = '🟡';
+                else if (f < 0) el.innerText = '⚪';
                 else el.innerText = '🔴';
             }
         }
@@ -430,13 +432,23 @@
                 const sessionListId = `${id}_sessions_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
                 const healthId = `${id}_health_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
                 const pulseId = `${id}_pulse_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
+                
+                let initialIndicator = '⚪';
+                if (hostHealthStates[conn.label]) {
+                    const f = hostHealthStates[conn.label].failures;
+                    if (f === 0) initialIndicator = '🟢';
+                    else if (f === 1) initialIndicator = '🟡';
+                    else if (f < 0) initialIndicator = '⚪';
+                    else initialIndicator = '🔴';
+                }
+
                 card.innerHTML = `
                     <div class="connection-header">
                         <div class="connection-drag-handle" title="Drag to reorder" draggable="true">⠿</div>
                         <div class="connection-title">
                             <div style="font-size: 18px; color: #fff; margin-bottom: 2px; display: flex; align-items: center;">
                                 <div style="position: relative; display: inline-block; width: 14px; height: 14px; margin-right: 8px;">
-                                    <span id="${healthId}" style="font-size: 12px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">🔴</span>
+                                    <span id="${healthId}" style="font-size: 12px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">${initialIndicator}</span>
                                     <div id="${pulseId}" class="pulse-indicator"></div>
                                 </div>
                                 <span>${conn.label}</span>

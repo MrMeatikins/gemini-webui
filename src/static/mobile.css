@@ -66,8 +66,8 @@ html, body {
 
 /* Adjust connection action buttons size on mobile */
 .is-mobile .connection-actions button {
-    flex: 0 1 45%;
-    max-width: 45%;
+    flex: 0 1 34%;
+    max-width: 34%;
     white-space: normal;
     word-wrap: break-word;
 }
