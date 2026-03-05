@@ -11,7 +11,7 @@ Gemini WebUI provides a high-fidelity, persistent web interface for the Gemini C
 *   **Multi-Environment Management**
     Manage multiple Gemini CLI instances across various computers, projects, and workspaces from a single, unified dashboard.
 *   **Mobile-First Design**
-    Experience a fully responsive UI equipped with mobile-friendly controls, enabling full Gemini CLI functionality on the go.
+    Experience a fully responsive UI equipped with mobile-friendly controls, enabling full Gemini CLI functionality on the go. Use mobile speech-to-text to communicate naturally with the Gemini CLI.
 *   **Session Persistence**
     True cross-device persistence allows you to resume live sessions from your desktop directly on your phone or tablet without losing valuable context.
 *   **Seamless File Management**

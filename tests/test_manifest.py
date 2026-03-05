@@ -3,8 +3,7 @@ import os
 
 def test_manifest_short_name_and_comment():
     """
-    Test that manifest.json has the correct short_name ('GemWebUI') 
-    for mobile differentiation and contains a comment explaining it.
+    Test that manifest.json has the correct short_name.
     """
     manifest_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
@@ -16,6 +15,4 @@ def test_manifest_short_name_and_comment():
     with open(manifest_path, 'r') as f:
         manifest_data = json.load(f)
         
-    assert manifest_data.get('short_name') == "GemWebUI", "short_name must be 'GemWebUI' to differentiate from the native Gemini app on mobile"
-    assert "_comment" in manifest_data, "manifest.json must have a comment explaining the short_name"
-    assert "differentiate" in manifest_data["_comment"].lower(), "comment must explain the reasoning for the short_name"
+    assert manifest_data.get('short_name') == "Gemini WebUI", "short_name must be 'Gemini WebUI'"

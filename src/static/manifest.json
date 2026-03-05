@@ -1,7 +1,6 @@
 {
   "name": "Gemini WebUI",
-  "short_name": "GemWebUI",
-  "_comment": "short_name is GemWebUI to differentiate from the native Gemini app on mobile home screens where names are truncated.",
+  "short_name": "Gemini WebUI",
   "id": "/?source=pwa",
   "description": "A secure web-based terminal for Gemini CLI",
   "start_url": "/?source=pwa",
@@ -28,5 +27,5 @@
       "purpose": "any"
     }
   ],
-  "version": "0.1.52"
+  "version": "0.1.54"
 }

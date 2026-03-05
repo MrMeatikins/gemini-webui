@@ -66,4 +66,6 @@ html, body {
 .is-mobile .connection-actions button {
     flex: 0 1 45%;
     max-width: 45%;
+    white-space: normal;
+    word-wrap: break-word;
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gemini-webui-v0.1.52';
+const CACHE_NAME = 'gemini-webui-v0.1.54';
 const ASSETS = [
   '/',
   '/static/favicon.svg',
