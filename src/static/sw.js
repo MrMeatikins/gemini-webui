@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gemini-webui-v0.1.83';
+const CACHE_NAME = 'gemini-webui-v0.1.84';
 const ASSETS = [
   '/',
   '/static/favicon.svg',
@@ -7,6 +7,7 @@ const ASSETS = [
   'https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css',
   'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js',
   'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js',
+  'https://cdn.jsdelivr.net/npm/xterm-addon-serialize@0.11.0/lib/xterm-addon-serialize.js',
   'https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js'
 ];
 

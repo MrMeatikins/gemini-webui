@@ -26,6 +26,7 @@
         <div id="active-connection-info" style="display: none; align-items: center; gap: 10px; border-left: 1px solid #555; padding-left: 10px;">
             <button onclick="restartActiveTab()">Restart</button>
             <button onclick="openFileTransfer()" style="background: #2472c8;">Files</button>
+            <button id="share-session-btn" onclick="shareSession()" style="background: #e5a50a; color: #000;">Share</button>
         </div>
         <div id="connection-status" style="margin-left: auto; color: #0dbc79; font-weight: bold; font-family: monospace; padding: 5px 10px;"></div>
     </div>
@@ -155,6 +156,23 @@
         </div>
     </div>
 
+    <div id="share-modal" class="modal">
+        <div class="modal-content">
+            <span onclick="closeShareModal()" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer; opacity: 0.7;">&times;</span>
+            <h2 style="margin-top: 0;">Share Session</h2>
+            <div style="background: #2a2d2e; padding: 15px; border-radius: 4px; margin-top: 15px;">
+                <p style="color: #e5a50a; font-weight: bold;">Warning!</p>
+                <p>This will generate a publicly accessible link. Ensure there are no passwords, API keys, or sensitive environment variables in the terminal scrollback before sharing.</p>
+                <div id="share-result" style="margin-top: 15px; display: none;">
+                    <input type="text" id="share-link-input" readonly style="width: 100%; margin-bottom: 10px; color: #0dbc79;">
+                    <button class="small" onclick="copyShareLink()">Copy Link</button>
+                    <a id="share-link-anchor" href="#" target="_blank" style="margin-left: 10px; color: #3b8eea; text-decoration: none;">Open Link</a>
+                </div>
+                <button id="confirm-share-btn" class="primary" style="width: 100%; margin-top: 15px;" onclick="confirmShareSession()">Generate Share Link</button>
+            </div>
+        </div>
+    </div>
+    
     <div id="quick-add-key-modal" class="modal">
         <div class="modal-content">
             <span onclick="closeQuickAddKey()" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer; opacity: 0.7;">&times;</span>
@@ -173,6 +191,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js" integrity="sha256-EPMZTF8XwXhvt9XbhlweyFObZzajGAY/04var3xGhI8=" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
     <script src="https://unpkg.com/xterm-addon-webgl@0.16.0/lib/xterm-addon-webgl.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-serialize@0.11.0/lib/xterm-addon-serialize.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha256-y6ZcVexS2AE/5ykFy1hqui8oXHHkKXk1CDE4x43QsDs=" crossorigin="anonymous"></script>
     <script src="/static/app.js?v={{ version }}"></script>
     <div id="version-footer" style="position: fixed; bottom: 5px; right: 5px; font-size: 10px; color: rgba(255, 255, 255, 0.3); pointer-events: none; z-index: 9999; font-family: monospace;">v{{ version }}</div>

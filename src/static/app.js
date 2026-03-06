@@ -1502,13 +1502,15 @@
                 let modalMouseDownTarget = null;
                 const settingsModal = document.getElementById('settings-modal');
                 const quickAddModal = document.getElementById('quick-add-key-modal');
+                const shareModal = document.getElementById('share-modal');
         
-                [settingsModal, quickAddModal].forEach(modal => {
+                [settingsModal, quickAddModal, shareModal].forEach(modal => {
                     modal.addEventListener('mousedown', (e) => { modalMouseDownTarget = e.target; });
                     modal.addEventListener('mouseup', (e) => {
                         if (modalMouseDownTarget === modal && e.target === modal) {
                             if (modal === settingsModal) closeSettings();
-                            else closeQuickAddKey();
+                            else if (modal === quickAddModal) closeQuickAddKey();
+                            else if (modal === shareModal) closeShareModal();
                         }
                         modalMouseDownTarget = null;
                     });
@@ -1873,6 +1875,73 @@
 
         function closeFileTransfer() {
             document.getElementById('file-transfer-modal').style.display = 'none';
+        }
+
+        function shareSession() {
+            const tab = tabs.find(t => t.id === activeTabId);
+            if (!tab || tab.state !== 'terminal') return alert("No active terminal to share.");
+            document.getElementById('share-result').style.display = 'none';
+            document.getElementById('confirm-share-btn').style.display = 'block';
+            document.getElementById('share-modal').style.display = 'block';
+        }
+
+        function closeShareModal() {
+            document.getElementById('share-modal').style.display = 'none';
+        }
+
+        async function confirmShareSession() {
+            const tab = tabs.find(t => t.id === activeTabId);
+            if (!tab || !tab.term) return;
+
+            document.getElementById('confirm-share-btn').style.display = 'none';
+
+            let serializeAddon;
+            try {
+                serializeAddon = new SerializeAddon.SerializeAddon();
+                tab.term.loadAddon(serializeAddon);
+            } catch (e) {
+                console.error("Failed to load serialize addon", e);
+                alert("Serialize addon could not be loaded.");
+                return;
+            }
+
+            const htmlDump = serializeAddon.serializeAsHTML();
+
+            try {
+                const response = await fetch('/api/shares/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    body: JSON.stringify({
+                        html_content: htmlDump,
+                        session_name: tab.title || tab.session.ssh_target || 'Local Session'
+                    })
+                });
+
+                const result = await response.json();
+                if (response.ok && result.share_url) {
+                    document.getElementById('share-result').style.display = 'block';
+                    document.getElementById('share-link-input').value = window.location.origin + result.share_url;
+                    document.getElementById('share-link-anchor').href = result.share_url;
+                } else {
+                    alert('Failed to share: ' + (result.error || 'Unknown error'));
+                    document.getElementById('confirm-share-btn').style.display = 'block';
+                }
+            } catch (err) {
+                alert('Share error: ' + err.message);
+                document.getElementById('confirm-share-btn').style.display = 'block';
+            } finally {
+                serializeAddon.dispose();
+            }
+        }
+
+        function copyShareLink() {
+            const linkInput = document.getElementById('share-link-input');
+            linkInput.select();
+            linkInput.setSelectionRange(0, 99999);
+            copyToClipboard(linkInput.value);
         }
 
         async function uploadWorkspaceFile() {
