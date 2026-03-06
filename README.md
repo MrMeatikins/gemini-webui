@@ -21,6 +21,8 @@ Gemini WebUI provides a high-fidelity, persistent web interface for the Gemini C
     
     ![File Transfer Screen](docs/images/file-transfer-screen.png)
 
+*   **Share Terminal Sessions**
+    Easily export and share your terminal scrollback as a responsive, public HTML snapshot with a simple click. Review the data, confirm, and receive an instant, unauthenticated link to share context, bugs, or solutions with others.
 *   **Scoped Environments**
     Robust support for scoped development or per-app system administrator setups, ensuring secure and isolated AI environments tailored to your needs.
 *   **Easy Deployment**
