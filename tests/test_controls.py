@@ -135,6 +135,8 @@ def test_haptic_feedback(mobile_page):
     vibrated_params = mobile_page.evaluate("window.vibratedParams")
     assert vibrated_params == [5], f"Expected navigator.vibrate(5) to be called, got {vibrated_params}"
 
+    esc_btn.dispatch_event("touchend")
+
     # Test toggle button (Ctrl)
     # Reset mock array
     mobile_page.evaluate("window.vibratedParams = []")
