@@ -1517,7 +1517,80 @@
                 });
         
                 async function openSettings() { 
-         document.getElementById('settings-modal').style.display = 'block'; loadHosts(); loadKeys(); loadPublicKey(); initThemeUI(); }
+         document.getElementById('settings-modal').style.display = 'block'; loadHosts(); loadKeys(); loadPublicKey(); initThemeUI(); loadSharedSessions(); }
+
+        async function loadSharedSessions() {
+            const list = document.getElementById('shared-sessions-list');
+            if (!list) return;
+            list.innerHTML = '<div style="padding: 10px; color: #888; font-size: 13px;">Loading shared sessions...</div>';
+            try {
+                const response = await fetch('/api/shares');
+                if (response.ok) {
+                    const data = await response.json();
+                    const shares = data.shares || data; // handle if it's wrapped or array directly
+                    
+                    list.innerHTML = '';
+                    if (!shares || shares.length === 0) {
+                        list.innerHTML = '<div style="padding: 10px; color: #666; font-size: 13px;">No shared sessions.</div>';
+                        return;
+                    }
+                    
+                    // Note: API might return an object with keys or array, handle accordingly
+                    const shareArray = Array.isArray(shares) ? shares : Object.keys(shares).map(k => ({id: k, ...shares[k]}));
+
+                    shareArray.forEach(share => {
+                        const item = document.createElement('div');
+                        item.className = 'session-item';
+                        item.style.display = 'flex';
+                        item.style.justifyContent = 'space-between';
+                        item.style.alignItems = 'center';
+                        item.style.borderBottom = '1px solid #444';
+                        item.style.padding = '10px';
+                        
+                        const dateStr = share.created_at ? new Date(share.created_at * 1000).toLocaleString() : 'Unknown';
+                        const shareId = share.id || share.uuid; // handle both just in case
+                        const linkUrl = window.location.origin + '/s/' + shareId;
+                        const sessionName = share.session_name || 'Shared Session';
+                        
+                        item.innerHTML = `
+                            <div style="flex-grow: 1; overflow: hidden; margin-right: 15px;">
+                                <div style="color: #3b8eea; font-weight: bold; margin-bottom: 5px;">${sessionName}</div>
+                                <div style="font-size: 11px; color: #888; margin-bottom: 5px;">Created: ${dateStr}</div>
+                                <div style="font-size: 11px; color: #0dbc79; cursor: pointer; text-decoration: underline;" onclick="copyToClipboard('${linkUrl}')">Copy Link</div>
+                            </div>
+                            <button class="danger small" onclick="deleteSharedSession('${shareId}')">Delete</button>
+                        `;
+                        list.appendChild(item);
+                    });
+                } else {
+                    list.innerHTML = '<div style="padding: 10px; color: #cd3131; font-size: 13px;">Failed to load shared sessions.</div>';
+                }
+            } catch (e) {
+                console.error("Failed to load shared sessions", e);
+                list.innerHTML = '<div style="padding: 10px; color: #cd3131; font-size: 13px;">Error loading shared sessions.</div>';
+            }
+        }
+
+        async function deleteSharedSession(uuid) {
+            if (!confirm('Are you sure you want to delete this shared session?')) return;
+            try {
+                const response = await fetch('/api/shares/' + uuid, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    }
+                });
+                if (response.ok) {
+                    loadSharedSessions();
+                } else {
+                    const data = await response.json();
+                    alert('Failed to delete: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error("Failed to delete shared session", e);
+                alert('Error deleting shared session.');
+            }
+        }
         async function loadPublicKey() {
             try {
                 const response = await fetch('/api/keys/public');
