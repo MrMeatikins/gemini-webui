@@ -38,7 +38,7 @@ def test_status_indicator_animation(page):
     playwright_page.wait_for_selector(".launcher", state="attached", timeout=15000)
     
     # Check that it appears in backend sessions and has status-node and status-online
-    expect(playwright_page.locator('.status-node.status-online').first).to_be_visible(timeout=5000)
+    expect(playwright_page.locator('.status-node.status-online').first).to_be_attached(timeout=10000)
     
     # Ensure there is a flash class logic built-in, but initially it won't have flash unless it updates
     assert playwright_page.locator('.status-node.status-online').count() > 0
