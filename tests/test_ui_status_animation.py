@@ -38,10 +38,20 @@ def test_status_indicator_animation(page):
     playwright_page.wait_for_selector(".launcher", state="attached", timeout=15000)
     
     # Check that it appears in backend sessions and has status-node and status-online
-    expect(playwright_page.locator('.status-node.status-online').first).to_be_attached(timeout=10000)
+    node = playwright_page.locator('.status-node.status-online').first
+    expect(node).to_be_attached(timeout=10000)
     
     # Ensure there is a flash class logic built-in, but initially it won't have flash unless it updates
-    assert playwright_page.locator('.status-node.status-online').count() > 0
+    assert node.count() > 0
+    
+    # Check CSS properties to ensure no clipping
+    margin_top = node.evaluate("el => window.getComputedStyle(el).marginTop")
+    margin_bottom = node.evaluate("el => window.getComputedStyle(el).marginBottom")
+    margin_left = node.evaluate("el => window.getComputedStyle(el).marginLeft")
+    
+    assert int(margin_top.replace('px', '')) >= 4, "Spinner top margin is too small, will clip"
+    assert int(margin_bottom.replace('px', '')) >= 4, "Spinner bottom margin is too small, will clip"
+    assert int(margin_left.replace('px', '')) >= 4, "Spinner left margin is too small, will clip"
     
     # To test orphaned, we can mark the session as orphaned on the server (by calling a disconnect logic if possible)
     # But for a basic unit test verifying the DOM logic, this is sufficient.

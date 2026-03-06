@@ -158,7 +158,7 @@ input[type="text"], textarea { width: 100%; background: #444; color: white; bord
     height: 10px;
     border-radius: 50%;
     display: inline-block;
-    margin-right: 12px;
+    margin: 4px 12px 4px 4px;
     flex-shrink: 0;
 }
 .status-node::before {
