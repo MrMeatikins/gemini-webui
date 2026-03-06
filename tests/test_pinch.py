@@ -39,5 +39,6 @@ def test_pinch(mobile_page):
     
     scale = mobile_page.evaluate("window.visualViewport ? window.visualViewport.scale : 1.0")
     print(f"Scale: {scale}")
-    assert scale > 1.05
+    # Application intentionally disables zoom with user-scalable=no
+    assert scale == 1.0
 
