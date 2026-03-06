@@ -352,10 +352,12 @@
             saveTabsToStorage();
         }
 
+        let backendSessionLastSeen = {};
+
         function refreshBackendSessionsList(id) {
             const listEl = document.getElementById(`${id}_backend_sessions`);
             if (!listEl) return; // Tab closed or switched
-            
+
             fetch('/api/management/sessions').then(r => r.json()).then(sessions => {
                 if (!sessions || sessions.length === 0) {
                     listEl.innerHTML = '<div style="padding: 10px; color: #444; font-size: 11px;">No detached sessions found on the server.</div>';
@@ -363,8 +365,15 @@
                 }
                 let html = '';
                 sessions.forEach(s => {
-                    const statusColor = s.is_orphaned ? '#888' : '#0dbc79';
+                    const statusClass = s.is_orphaned ? 'status-orphaned' : 'status-online';
                     const statusLabel = s.is_orphaned ? 'Orphaned' : 'Active';
+
+                    let flashClass = '';
+                    if (backendSessionLastSeen[s.tab_id] && backendSessionLastSeen[s.tab_id] !== s.last_active) {
+                        flashClass = 'flash';
+                    }
+                    backendSessionLastSeen[s.tab_id] = s.last_active;
+
                     const shortDir = s.ssh_dir ? s.ssh_dir.split('/').pop() : '';
                     const dirContext = shortDir ? `<span style="color: #0dbc79; font-weight: bold; margin-right: 5px;">[${shortDir}]</span>` : '';
                     const lastSeenDate = s.last_active ? new Date(s.last_active * 1000).toLocaleString() : 'Unknown';
@@ -373,16 +382,15 @@
                             <div class="session-info">
                                 <div style="color: #3b8eea; font-weight: bold; font-size: 14px; margin-bottom: 2px;">${dirContext}${s.title}</div>
                                 <div style="color: #888; font-size: 11px; display: flex; align-items: center; gap: 8px;">
-                                    <span style="color: ${statusColor}; font-weight: bold; display: flex; align-items: center; gap: 4px;">
-                                        <span style="font-size: 14px;">●</span> ${statusLabel}
+                                    <span style="font-weight: bold; display: flex; align-items: center; gap: 4px;">
+                                        <span class="status-node ${statusClass} ${flashClass}"></span> ${statusLabel}
                                     </span> 
                                     <span style="color: #555;">|</span>
                                     <span class="session-id-display" style="font-family: monospace;">ID: ${s.tab_id}</span>
                                     <span style="color: #555;">|</span>
                                     <span class="session-last-seen-display">Last seen: ${lastSeenDate}</span>
                                 </div>
-                            </div>
-                            <div style="display: flex; gap: 8px;">
+                            </div>                            <div style="display: flex; gap: 8px;">
                                 <button class="small primary" style="padding: 6px 12px;" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
                                 <button class="small danger" style="padding: 6px 12px;" onclick="terminateBackendSession('${id}', '${s.tab_id}')">Terminate</button>
                             </div>
@@ -622,8 +630,22 @@
                     // Optional: refresh from backend to ensure consistent state
                     refreshBackendSessionsList(launcherTabId);
                 } else {
-                    const data = await response.json();
-                    alert("Termination failed: " + (data.error || "Unknown error"));
+                    let errorMessage = "Unknown error";
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.indexOf("application/json") !== -1) {
+                        try {
+                            const data = await response.json();
+                            errorMessage = data.error || data.message || errorMessage;
+                        } catch (e) {
+                            errorMessage = "Failed to parse error response.";
+                        }
+                    } else {
+                        errorMessage = await response.text();
+                    }
+                    if (response.status === 400 || response.status === 403) {
+                        errorMessage += " (Auth/CSRF error - please reload the page)";
+                    }
+                    alert("Termination failed: " + errorMessage);
                 }
             } catch (e) { 
                 console.error(e);
@@ -891,11 +913,30 @@
                                     // 1. Clear any active selection
                                     window.getSelection().removeAllRanges();
                                     
-                                    // 2. Immediately focus the terminal (with a tiny delay to ensure it sticks)
-                                    if (tab.term) {
-                                        tab.term.focus();
-                                        setTimeout(() => { if (tab.term) tab.term.focus(); }, 10);
+                                    // Temporarily hide proxy to find what's underneath
+                                    proxy.style.display = 'none';
+                                    const underlying = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+                                    proxy.style.display = 'block';
+
+                                    if (underlying) {
+                                        const eventInit = {
+                                            view: window,
+                                            bubbles: true,
+                                            cancelable: true,
+                                            clientX: e.changedTouches[0].clientX,
+                                            clientY: e.changedTouches[0].clientY
+                                        };
+                                        underlying.dispatchEvent(new MouseEvent('mousedown', eventInit));
+                                        underlying.dispatchEvent(new MouseEvent('mouseup', eventInit));
+                                        underlying.dispatchEvent(new MouseEvent('click', eventInit));
                                     }
+
+                                    // 2. Focus the terminal with a tiny delay to allow link handling
+                                    setTimeout(() => {
+                                        if (tab.term && document.activeElement !== document.querySelector('textarea.xterm-helper')) {
+                                            tab.term.focus();
+                                        }
+                                    }, 50);
 
                                     // 3. Briefly disable pointer-events to let the tap through for focus
                                     proxy.style.pointerEvents = 'none';
@@ -1104,11 +1145,14 @@
                         input = '\x1b' + input;
                         toggleAlt(false);
                     }
-                    tab.socket.emit('pty-input', {input});
+                    emitPtyInput(tab, input);
                 }
             });
             tab.term.onTitleChange((title) => {
                 tab.title = title;
+                if (tab.socket) {
+                    tab.socket.emit('update_title', { tab_id: tab.id, title: title });
+                }
                 renderTabs();
                 updatePageTitle();
                 
@@ -1124,11 +1168,19 @@
                             });
                         });
                     }
+                } else if (!title.includes('✋')) {
+                    if ('Notification' in window && navigator.serviceWorker) {
+                        navigator.serviceWorker.ready.then(registration => {
+                            registration.getNotifications({ tag: 'gemini-action-' + tabId }).then(notifications => {
+                                notifications.forEach(notification => notification.close());
+                            });
+                        });
+                    }
                 }
             });
             tab.term.attachCustomKeyEventHandler((e) => {
                 if (e.type === 'keydown' && e.ctrlKey && e.key === 'Enter') {
-                    if (tab.socket) tab.socket.emit('pty-input', {input: '\x1b\r'});
+                    if (tab.socket) emitPtyInput(tab, '\x1b\r');
                     return false;
                 }
                 return true;
@@ -1176,10 +1228,20 @@
             if (tab && tab.term) tab.term.focus();
         }
 
+        function emitPtyInput(tab, data) {
+            if (!tab || !tab.socket || data == null) return;
+            const chunkSize = 1024;
+            const strData = String(data);
+            for (let i = 0; i < strData.length; i += chunkSize) {
+                const chunk = strData.slice(i, i + chunkSize);
+                tab.socket.emit('pty-input', {input: chunk});
+            }
+        }
+
         function sendToTerminal(data) {
             const tab = tabs.find(t => t.id === activeTabId);
             if (tab && tab.socket && tab.state === 'terminal') {
-                tab.socket.emit('pty-input', {input: data});
+                emitPtyInput(tab, data);
                 tab.term.focus();
             }
         }
@@ -1299,14 +1361,26 @@
         });
         resizeObserver.observe(document.getElementById('terminal-container'));
 
+        // Abstract visualViewport so it can be mocked in tests
+        window.appVisualViewport = window.visualViewport ? {
+            get height() { return window.visualViewport.height; },
+            get scale() { return window.visualViewport.scale; },
+            addEventListener: window.visualViewport.addEventListener.bind(window.visualViewport),
+            removeEventListener: window.visualViewport.removeEventListener.bind(window.visualViewport)
+        } : null;
+
         // Handle mobile keyboard resizing using Visual Viewport API
-        if (window.visualViewport) {
+        if (window.appVisualViewport) {
             let resizeTimeout;
-            let lastViewHeight = window.visualViewport.height;
-            window.visualViewport.addEventListener('resize', () => {
+            let lastViewHeight = window.appVisualViewport.height;
+            window.appVisualViewport.addEventListener('resize', () => {
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(() => {
-                    const viewHeight = window.visualViewport.height;
+                    if (window.appVisualViewport.scale > 1.05) {
+                        return; // User is zooming, do not break layout
+                    }
+
+                    const viewHeight = window.appVisualViewport.height;
                     // Ignore tiny jitters (less than 20px) to prevent scroll interruption
                     if (Math.abs(viewHeight - lastViewHeight) < 20) return;
                     lastViewHeight = viewHeight;
@@ -1314,15 +1388,14 @@
                     // Constrain the body height to exactly the visible viewport height
                     // This moves the bottom-pinned mobile controls to just above the keyboard
                     document.body.style.height = `${viewHeight}px`;
-                    
+
                     window.scrollTo(0, 0);
                     tabs.forEach(tab => fitTerminal(tab));
                 }, 100);
             });
             // Also initialize with the current height
-            document.body.style.height = `${window.visualViewport.height}px`;
+            document.body.style.height = `${window.appVisualViewport.height}px`;
         }
-
         if (!loadTabsFromStorage()) {
             addNewTab(true);
         }
@@ -1496,6 +1569,77 @@
                 }
             } catch (e) { console.error("Rotate failed", e); }
         }
+        class EnvVarManager {
+            constructor() {
+                this.container = document.getElementById('env-vars-list');
+                this.addBtn = document.getElementById('add-env-var-btn');
+                this.addBtn.addEventListener('click', () => this.addVariable());
+                this.variables = [];
+            }
+
+            addVariable(key = '', value = '') {
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.gap = '5px';
+                
+                const keyInput = document.createElement('input');
+                keyInput.type = 'text';
+                keyInput.placeholder = 'Key (e.g. PORT)';
+                keyInput.value = key;
+                keyInput.style.flex = '1';
+
+                const valInput = document.createElement('input');
+                valInput.type = 'text';
+                valInput.placeholder = 'Value';
+                valInput.value = value;
+                valInput.style.flex = '1';
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'danger small';
+                removeBtn.innerText = 'X';
+                removeBtn.onclick = () => {
+                    this.container.removeChild(row);
+                };
+
+                row.appendChild(keyInput);
+                row.appendChild(valInput);
+                row.appendChild(removeBtn);
+                this.container.appendChild(row);
+            }
+
+            clear() {
+                this.container.innerHTML = '';
+            }
+
+            load(envVars) {
+                this.clear();
+                if (envVars) {
+                    for (const [key, value] of Object.entries(envVars)) {
+                        this.addVariable(key, value);
+                    }
+                }
+            }
+
+            get() {
+                const envVars = {};
+                for (let i = 0; i < this.container.children.length; i++) {
+                    const row = this.container.children[i];
+                    const key = row.children[0].value.trim();
+                    const value = row.children[1].value.trim();
+                    if (key) {
+                        envVars[key] = value;
+                    }
+                }
+                return envVars;
+            }
+        }
+
+        let envVarManager;
+        document.addEventListener('DOMContentLoaded', () => {
+            envVarManager = new EnvVarManager();
+        });
+
         let editingHostLabel = null;
 
         async function loadHosts() {
@@ -1512,6 +1656,7 @@
             document.getElementById('new-host-label').value = host.label;
             document.getElementById('new-host-target').value = host.target || '';
             document.getElementById('new-host-dir').value = host.dir || '';
+            if (envVarManager) envVarManager.load(host.env_vars || {});
             if (host.label === 'local') {
                 editingHostLabel = null;
                 setHostMode('add'); // Cannot edit default local, force add mode
@@ -1548,6 +1693,7 @@
             document.getElementById('new-host-label').value = '';
             document.getElementById('new-host-target').value = '';
             document.getElementById('new-host-dir').value = '';
+            if (envVarManager) envVarManager.clear();
             editingHostLabel = null;
             setHostMode('add');
         }
@@ -1562,14 +1708,14 @@
                 return alert("Cannot update protected 'local' host.");
             }
 
-            const host = { 
-                label, 
-                type: target ? 'ssh' : 'local', 
-                target, 
+            const host = {
+                label,
+                type: target ? 'ssh' : 'local',
+                target,
                 dir,
+                env_vars: envVarManager ? envVarManager.get() : {},
                 old_label: editingHostLabel // Pass to server for in-place update
-            };
-            
+            };            
             const response = await fetch('/api/hosts', { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
@@ -1626,8 +1772,22 @@
                     fileInput.value = '';
                     loadKeys();
                 } else {
-                    const data = await response.json();
-                    alert("Upload failed: " + (data.message || "Unknown error"));
+                    let errorMessage = "Unknown error";
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.indexOf("application/json") !== -1) {
+                        try {
+                            const data = await response.json();
+                            errorMessage = data.error || data.message || errorMessage;
+                        } catch (e) {
+                            errorMessage = "Failed to parse error response.";
+                        }
+                    } else {
+                        errorMessage = await response.text();
+                    }
+                    if (response.status === 400 || response.status === 403) {
+                        errorMessage += " (Auth/CSRF error - please reload the page)";
+                    }
+                    alert("Upload failed: " + errorMessage);
                 }
             } catch (err) {
                 alert("Upload failed: " + err.message);
@@ -1746,7 +1906,7 @@
                 if (result.status === 'success') {
                     const tab = tabs.find(t => t.id === activeTabId);
                     if (tab && tab.socket && tab.state === 'terminal') {
-                        tab.socket.emit('pty-input', {input: `> I uploaded @${result.filename}\r`});
+                        emitPtyInput(tab, `> I uploaded @${result.filename}\r`);
                         tab.term.focus();
                     } else {
                         alert('File uploaded successfully');
@@ -1888,7 +2048,7 @@
                     const tab = tabs.find(t => t.id === activeTabId);
                     if (tab && tab.socket && tab.state === 'terminal') {
                         const msg = successCount > 1 ? `> I uploaded multiple files to @${uploadPrefix}\r` : `> I uploaded @${lastFilename}\r`;
-                        tab.socket.emit('pty-input', {input: msg});
+                        emitPtyInput(tab, msg);
                         tab.term.focus();
                     } else if (successCount === 1) {
                         alert('File uploaded successfully');

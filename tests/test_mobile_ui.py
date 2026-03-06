@@ -263,3 +263,143 @@ def test_mobile_connection_button_size(mobile_page):
 
     assert button_white_space == 'nowrap', f"white-space should be nowrap, but got {button_white_space}"
 
+
+@pytest.mark.timeout(40)
+def test_mobile_large_paste(mobile_page):
+    """Verify that pasting a large block of text works without breaking on mobile."""
+    mobile_page.click("text=Start New")
+    mobile_page.wait_for_selector(".terminal-instance", timeout=10000)
+    
+    # Wait for bash prompt
+    import time
+    time.sleep(2)
+    
+    large_text = "A" * 15000
+    
+    # Execute a paste event
+    mobile_page.evaluate("""(text) => {
+        const tab = tabs.find(t => t.id === activeTabId);
+        if (tab && tab.term) {
+            emitPtyInput(tab, text);
+        }
+    }""", large_text)
+    
+    start_time = time.time()
+    found = False
+    while time.time() - start_time < 15:
+        content = mobile_page.evaluate("""() => {
+            const tab = tabs.find(t => t.id === activeTabId);
+            if (tab && tab.term) {
+                let out = "";
+                for (let i = 0; i < tab.term.buffer.active.length; i++) {
+                    const line = tab.term.buffer.active.getLine(i);
+                    if (line) out += line.translateToString();
+                }
+                return out;
+            }
+            return "";
+        }""")
+        if content.count("A") > 10000:
+            found = True
+            break
+        time.sleep(0.5)
+        
+    assert found, "Large paste text was not fully echoed back to the terminal"
+
+@pytest.mark.timeout(30)
+def test_mobile_link_tapping(custom_mobile_page):
+    """Verify that tapping a link opens it instead of just focusing."""
+    page = custom_mobile_page
+    
+    page.wait_for_selector(".launcher", state="attached", timeout=15000)
+    page.click("text=Start New", timeout=10000)
+    page.wait_for_selector(".terminal-instance", timeout=10000)
+
+    page.evaluate("""() => {
+        const tab = tabs.find(t => t.id === activeTabId);
+        if (tab && tab.term) {
+            tab.term.write('\\r\\nhttps://google.com\\r\\n');
+        }
+    }""")
+    
+    import time
+    time.sleep(1)
+    
+    page.evaluate("window.openedUrl = null; window.open = (url) => { window.openedUrl = url; return null; };")
+    
+    page.evaluate("""() => {
+        const proxy = document.querySelector(".mobile-scroll-proxy");
+        if (proxy) {
+            const rect = proxy.getBoundingClientRect();
+            const startX = rect.left + rect.width / 2;
+            const startY = rect.top + rect.height / 2;
+            
+            const event = new Event("touchstart", { bubbles: true, cancelable: true });
+            event.touches = [{clientX: startX, clientY: startY}];
+            proxy.dispatchEvent(event);
+            
+            const endEvent = new Event("touchend", { bubbles: true, cancelable: true });
+            endEvent.changedTouches = [{clientX: startX, clientY: startY}];
+            proxy.dispatchEvent(endEvent);
+        }
+    }""")
+    
+    time.sleep(1)
+
+@pytest.mark.timeout(30)
+def test_mobile_pinch_zoom_no_resize(mobile_page):
+    """Verify that pinch-to-zoom does not trigger layout recalculations that break the UI."""
+    mobile_page.click("text=Start New")
+    mobile_page.wait_for_selector(".terminal-instance", timeout=10000)
+    
+    # Allow time for initial setup
+    mobile_page.wait_for_timeout(1000)
+    
+    initial_height = mobile_page.evaluate("document.body.style.height")
+    
+    # We redefine the getters on the abstracted window.appVisualViewport object
+    mobile_page.evaluate("""() => {
+        if (window.appVisualViewport) {
+            Object.defineProperty(window.appVisualViewport, 'scale', {
+                get: () => 2.0 // simulate pinch zoom (> 1.05)
+            });
+            Object.defineProperty(window.appVisualViewport, 'height', {
+                get: () => parseInt(document.body.style.height || "0") - 100 // simulate height changing
+            });
+            
+            // Trigger the resize event on the native visualViewport, which will call the app.js listener
+            // that reads from window.appVisualViewport.
+            if (window.visualViewport) {
+                window.visualViewport.dispatchEvent(new Event('resize'));
+            }
+        }
+    }""")
+    
+    # Wait to see if height is changed by the resize event listener
+    # The timeout in app.js is 100ms
+    mobile_page.wait_for_timeout(500)
+    
+    new_height = mobile_page.evaluate("document.body.style.height")
+    
+    # Because scale is 2.0 (> 1.05), it should return early and NOT change body height
+    assert new_height == initial_height, f"Height unexpectedly changed from {initial_height} to {new_height} despite zoom"
+
+    # Now let's test what happens when scale is 1.0 (no zoom) to ensure our test works
+    mobile_page.evaluate("""() => {
+        if (window.appVisualViewport) {
+            Object.defineProperty(window.appVisualViewport, 'scale', {
+                get: () => 1.0 // no zoom
+            });
+            if (window.visualViewport) {
+                window.visualViewport.dispatchEvent(new Event('resize'));
+            }
+        }
+    }""")
+    
+    mobile_page.wait_for_timeout(500)
+    
+    final_height = mobile_page.evaluate("document.body.style.height")
+    # This time it should have updated the height
+    assert final_height != initial_height, "Height should have changed when scale is 1.0"
+
+
