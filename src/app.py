@@ -770,12 +770,30 @@ def upload_file():
 
         # Ensure directory structure exists on remote
         remote_dir = os.path.dirname(remote_path)
+        
+        # Extract port if present in ssh_target
+        port = None
+        clean_target = ssh_target
+        if ':' in ssh_target:
+            parts = ssh_target.rsplit(':', 1)
+            if parts[1].isdigit():
+                clean_target = parts[0]
+                port = parts[1]
+                
+        ssh_cmd_base = ['ssh'] + base_ssh_args
+        if port:
+            ssh_cmd_base.extend(['-p', port])
+            
+        scp_cmd_base = ['scp'] + base_ssh_args
+        if port:
+            scp_cmd_base.extend(['-P', port])
+
         if remote_dir:
-            ssh_cmd = ['ssh'] + base_ssh_args + ['--', ssh_target, f"mkdir -p {shlex.quote(remote_dir)}"]
+            ssh_cmd = ssh_cmd_base + ['--', clean_target, f"mkdir -p {shlex.quote(remote_dir)}"]
             subprocess.run(ssh_cmd)
 
         # Run SCP
-        scp_cmd = ['scp'] + base_ssh_args + ['--', save_path, f"{ssh_target}:{remote_path}"]
+        scp_cmd = scp_cmd_base + ['--', save_path, f"{clean_target}:{remote_path}"]
         try:
             result = subprocess.run(scp_cmd, capture_output=True, text=True)
             if result.returncode != 0:

@@ -64,9 +64,17 @@ def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
         remote_cmd = f"{remote_prefix} if command -v {quoted_gemini} >/dev/null 2>&1; then {gemini_list_cmd}; else exit 0; fi"
             
         login_wrapped_cmd = f"bash -ilc {shlex.quote(remote_cmd)}"
-            
+
         cmd = build_ssh_args(ssh_target, ssh_dir_path)
-        cmd.extend(['--', ssh_target, login_wrapped_cmd])
+
+        clean_target = ssh_target
+        if ':' in ssh_target:
+            parts = ssh_target.rsplit(':', 1)
+            if parts[1].isdigit():
+                clean_target = parts[0]
+                cmd.extend(['-p', parts[1]])
+
+        cmd.extend(['--', clean_target, login_wrapped_cmd])
     else:
         # Use workspace for local session listing to match startSession
         data_dir = env_config.DATA_DIR
@@ -157,8 +165,16 @@ def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin
             '-o', 'StrictHostKeyChecking=no',
             '-o', 'ServerAliveInterval=60',
             '-o', 'ServerAliveCountMax=120', # Allow up to 2 hours of silence
-            '--', ssh_target, login_wrapped_cmd
         ])
+        
+        clean_target = ssh_target
+        if ':' in ssh_target:
+            parts = ssh_target.rsplit(':', 1)
+            if parts[1].isdigit():
+                clean_target = parts[0]
+                cmd.extend(['-p', parts[1]])
+                
+        cmd.extend(['--', clean_target, login_wrapped_cmd])
         return _wrap_with_multiplexer(cmd)
     else:
         # Workspace initialization with failover guidance

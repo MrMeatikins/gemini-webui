@@ -1722,6 +1722,18 @@
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
             
+            const tab = tabs.find(t => t.id === activeTabId);
+            if (tab && tab.session && tab.session.type === 'ssh') {
+               if (!tab.session.ssh_target) {
+                   alert("SSH target is missing from session state! Upload cannot proceed.");
+                   return;
+               }
+               formData.append('ssh_target', tab.session.ssh_target);
+               if (tab.session.ssh_dir) {
+                   formData.append('ssh_dir', tab.session.ssh_dir);
+               }
+            }
+            
             try {
                 const response = await fetch('/api/upload', {
                     method: 'POST',
@@ -1840,6 +1852,18 @@
                     const formData = new FormData();
                     formData.append('file', file, finalPath);
                     
+                    const tab = activeTab;
+                    if (tab && tab.session && tab.session.type === 'ssh') {
+                       if (!tab.session.ssh_target) {
+                           alert("SSH target is missing from session state! Upload cannot proceed.");
+                           return;
+                       }
+                       formData.append('ssh_target', tab.session.ssh_target);
+                       if (tab.session.ssh_dir) {
+                           formData.append('ssh_dir', tab.session.ssh_dir);
+                       }
+                    }
+
                     try {
                         const response = await fetch('/api/upload', {
                             method: 'POST',
