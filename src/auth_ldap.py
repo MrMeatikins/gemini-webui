@@ -1,20 +1,24 @@
+try:
+    from config import env_config
+except ImportError:
+    from src.config import env_config
 import ldap3
-import re
+from ldap3.utils.conv import escape_filter_chars
 import logging
 
 logger = logging.getLogger(__name__)
 
 def sanitize_ldap_input(input_str):
-    return re.sub(r'[()\*\0]', '', input_str) if input_str else ""
+    return escape_filter_chars(str(input_str)) if input_str else ""
 
 def check_auth(username, password, ldap_server, ldap_base_dn, ldap_bind_user_dn=None, ldap_bind_pass=None, ldap_authorized_group=None, ldap_fallback_domain=None):
     try:
-        username = sanitize_ldap_input(username)
+        safe_username = sanitize_ldap_input(username)
         server = ldap3.Server(ldap_server, get_info=ldap3.ALL, connect_timeout=2)
         
         if ldap_bind_user_dn and ldap_bind_pass:
             conn = ldap3.Connection(server, user=ldap_bind_user_dn, password=ldap_bind_pass, auto_bind=True)
-            search_filter = f"(&(objectClass=*)(sAMAccountName={username}))"
+            search_filter = f"(&(objectClass=*)(sAMAccountName={safe_username}))"
             conn.search(ldap_base_dn, search_filter, attributes=['memberOf'])
             
             if not conn.entries:

@@ -1,4 +1,8 @@
 import os
+try:
+    from config import env_config
+except ImportError:
+    from src.config import env_config
 import signal
 import time
 import collections

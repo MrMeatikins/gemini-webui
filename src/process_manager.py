@@ -1,4 +1,8 @@
 import os
+try:
+    from config import env_config
+except ImportError:
+    from src.config import env_config
 import re
 import shlex
 import subprocess
@@ -52,11 +56,12 @@ def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
         if not validate_ssh_target(ssh_target):
             return {"error": "Invalid SSH target format", "timestamp": time.time()}
             
-        gemini_list_cmd = f"{gemini_bin} --list-sessions"
+        quoted_gemini = shlex.quote(gemini_bin)
+        gemini_list_cmd = f"{quoted_gemini} --list-sessions"
         remote_prefix = get_remote_command_prefix(ssh_dir, gemini_bin)
         
         # Check for gemini before running list-sessions to avoid ugly bash errors
-        remote_cmd = f"{remote_prefix} if command -v {gemini_bin} >/dev/null 2>&1; then {gemini_list_cmd}; else exit 0; fi"
+        remote_cmd = f"{remote_prefix} if command -v {quoted_gemini} >/dev/null 2>&1; then {gemini_list_cmd}; else exit 0; fi"
             
         login_wrapped_cmd = f"bash -ilc {shlex.quote(remote_cmd)}"
             
@@ -64,10 +69,10 @@ def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
         cmd.extend(['--', ssh_target, login_wrapped_cmd])
     else:
         # Use workspace for local session listing to match startSession
-        data_dir = os.environ.get("DATA_DIR", "/data")
+        data_dir = env_config.DATA_DIR
         work_dir = os.path.join(data_dir, "workspace")
         if os.path.exists(work_dir):
-            cmd = ['/bin/sh', '-c', f"cd {work_dir} && {gemini_bin} --list-sessions"]
+            cmd = ['/bin/sh', '-c', f"cd {shlex.quote(work_dir)} && {shlex.quote(gemini_bin)} --list-sessions"]
         else:
             cmd = [gemini_bin, '--list-sessions']
 
@@ -92,7 +97,7 @@ def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
 
 def _wrap_with_multiplexer(cmd):
     """Wraps the terminal command in a multiplexer (tmux or dtach) to prevent visual corruption on detach/re-attach."""
-    if os.environ.get("SKIP_MULTIPLEXER") == "true":
+    if env_config.SKIP_MULTIPLEXER:
         return cmd
         
     import shutil
@@ -113,18 +118,19 @@ def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin
         if not validate_ssh_target(ssh_target):
             return None # Invalid target
             
-        gemini_base_cmd = gemini_bin
+        quoted_gemini = shlex.quote(gemini_bin)
+        gemini_base_cmd = quoted_gemini
         if resume is True or str(resume).lower() == 'true':
             gemini_base_cmd += " -r"
         elif str(resume).lower() == 'new':
             pass # Just run gemini without -r to start a fresh session
         elif resume and str(resume).lower() != 'false':
-            gemini_base_cmd += f" -r {resume}"
+            gemini_base_cmd += f" -r {shlex.quote(str(resume))}"
         
         remote_prefix = get_remote_command_prefix(ssh_dir, gemini_bin)
         
         # Smart command construction: check for gemini, drop to shell if missing
-        remote_cmd = f"{remote_prefix} if command -v {gemini_bin} >/dev/null 2>&1; then "
+        remote_cmd = f"{remote_prefix} if command -v {quoted_gemini} >/dev/null 2>&1; then "
         remote_cmd += f"{gemini_base_cmd}; "
         remote_cmd += "else "
         remote_cmd += "printf '\\r\\n\\033[1;31mError: gemini CLI not found on remote host.\\033[0m\\r\\n'; "
@@ -156,23 +162,24 @@ def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin
         return _wrap_with_multiplexer(cmd)
     else:
         # Workspace initialization with failover guidance
-        data_dir = os.environ.get("DATA_DIR", "/data")
+        data_dir = env_config.DATA_DIR
         work_dir = os.path.join(data_dir, "workspace")
-        setup_cmd = f"mkdir -p {work_dir} 2>/dev/null || {{ "
+        quoted_work_dir = shlex.quote(work_dir)
+        setup_cmd = f"mkdir -p {quoted_work_dir} 2>/dev/null || {{ "
         setup_cmd += "printf '\\r\\n\\033[1;33mWARNING: Persistence volume not found at /data.\\033[0m\\r\\n'; "
         setup_cmd += "printf 'To enable persistence and prevent data loss, mount a volume:\\r\\n\\r\\n'; "
         setup_cmd += "printf '\\033[1;34mDocker Compose:\\033[0m\\r\\n  volumes:\\r\\n    - data:/data\\r\\n\\r\\n'; "
         setup_cmd += "printf '\\033[1;34mDocker CLI:\\033[0m\\r\\n  docker run -v gemini_data:/data ...\\r\\n\\r\\n'; "
         setup_cmd += "sleep 10; }; "
-        setup_cmd += f"cd {work_dir} 2>/dev/null || cd /tmp; "
+        setup_cmd += f"cd {quoted_work_dir} 2>/dev/null || cd /tmp; "
         
         # Use shell to ensure gemini is found in PATH and handled correctly
-        gemini_cmd = gemini_bin
+        gemini_cmd = shlex.quote(gemini_bin)
         if resume is True or str(resume).lower() == 'true':
             gemini_cmd += " -r"
         elif str(resume).lower() == 'new':
             pass # Just run gemini without -r to start a fresh session
         elif resume and str(resume).lower() != 'false':
-            gemini_cmd += f" -r {resume}"
+            gemini_cmd += f" -r {shlex.quote(str(resume))}"
         cmd = ['/bin/sh', '-c', f"{setup_cmd} exec {gemini_cmd}"]
         return _wrap_with_multiplexer(cmd)

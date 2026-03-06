@@ -47,8 +47,7 @@ def test_ssh_key_rotation_logic(test_data_dir):
         mock_run.side_effect = side_effect
         
         # Mock the rotate_instance_key API call indirectly or directly
-        from src.app import rotate_instance_key
-        # We need a request context for API calls
+        from src.host_key_routes import rotate_instance_key        # We need a request context for API calls
         with patch.dict(os.environ, {"BYPASS_AUTH_FOR_TESTING": "true"}):
             with app.test_request_context():
                 response = rotate_instance_key()

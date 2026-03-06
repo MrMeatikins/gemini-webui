@@ -73,3 +73,78 @@ def test_connection_health_indicators(page):
     
     # Success -> Green 🟢
     expect(local_health).to_have_text("🟢", timeout=5000)
+
+@pytest.mark.prone_to_timeout
+@pytest.mark.timeout(20)
+def test_default_health_indicator_grey(server):
+    """Verify that a server defaults to grey (⚪) and stays grey on first failure."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        page.on("console", lambda msg: print(f"CONSOLE: {msg.text}"))
+        page.on("pageerror", lambda err: print(f"PAGE ERROR: {err}"))
+        
+        # Mock /api/sessions to fail IMMEDIATELY on first load to simulate offline server
+        def handle_route(route):
+            route.fulfill(status=500, body="Internal Server Error")
+        page.route("**/api/sessions*", handle_route)
+        
+        page.goto(server, timeout=15000)
+        page.wait_for_selector(".launcher", state="attached", timeout=15000)
+        
+        # Check that local health indicator is ⚪ (grey)
+        local_health = page.locator('div[data-label="local"] .connection-title span[id$="_health_local"]')
+        expect(local_health).to_have_text("⚪", timeout=5000)
+        
+        # Check that it STAYS ⚪ even after a manual re-fetch
+        page.evaluate('''() => {
+            if (typeof activeTabId !== "undefined") {
+                const id = activeTabId;
+                const sessionListId = `${id}_sessions_local`;
+                fetchSessions(id, {label: 'local', type: 'local'}, sessionListId, false, false);
+            }
+        }''')
+        
+        expect(local_health).to_have_text("⚪", timeout=5000)
+
+        context.close()
+        browser.close()
+
+@pytest.mark.timeout(10)
+def test_sync_pulse_with_health_indicator(server):
+    """Verify that calling updateHostHealthIndicator synchronously triggers the pulse animation."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        page.goto(server, timeout=15000)
+        page.wait_for_selector(".launcher", state="attached", timeout=15000)
+        
+        pulse_indicator = page.locator('div[data-label="local"] .connection-title div[id$="_pulse_local"]')
+        
+        # The class stays on the element after animation, so we remove it manually to test the trigger
+        page.evaluate('''() => {
+            if (typeof activeTabId !== "undefined") {
+                const id = activeTabId;
+                const pulseId = `${id}_pulse_local`;
+                const pulseEl = document.getElementById(pulseId);
+                if (pulseEl) pulseEl.classList.remove('pulsing');
+            }
+        }''')
+        
+        expect(pulse_indicator).not_to_have_class(re.compile(r"pulsing"), timeout=5000)
+        
+        # Call updateHostHealthIndicator directly
+        page.evaluate('''() => {
+            if (typeof activeTabId !== "undefined") {
+                const id = activeTabId;
+                updateHostHealthIndicator(id, 'local', true);
+            }
+        }''')
+        
+        # Verify the pulse indicator triggers immediately
+        expect(pulse_indicator).to_have_class(re.compile(r"pulsing"), timeout=1000)
+
+        context.close()
+        browser.close()

@@ -77,6 +77,8 @@ def test_api_config(client):
     assert response.status_code == 200
     conf = json.loads(response.data)
     assert "HOSTS" in conf
+    assert "LDAP_BIND_PASS" not in conf
+    assert "ADMIN_PASS" not in conf
 
 def test_api_keys_list(client):
     response = client.get('/api/keys')

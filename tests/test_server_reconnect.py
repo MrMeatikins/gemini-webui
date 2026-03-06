@@ -24,7 +24,7 @@ def custom_server(test_data_dir):
     
     def start_server():
         proc = subprocess.Popen(
-            [python_bin, "src/app.py"],
+            [python_bin, "-m", "src.app"],
             env=env,
             cwd=project_root,
             preexec_fn=os.setsid
@@ -35,7 +35,7 @@ def custom_server(test_data_dir):
                 resp = requests.get(f"http://127.0.0.1:{port}/health", timeout=1)
                 if resp.status_code == 200:
                     break
-            except Exception:
+            except requests.RequestException:
                 pass
             time.sleep(1)
         return proc
@@ -53,7 +53,7 @@ def custom_server(test_data_dir):
             try:
                 os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
                 self.process.wait()
-            except Exception:
+            except OSError:
                 pass
                 
         def start(self):

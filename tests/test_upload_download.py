@@ -38,6 +38,59 @@ def test_upload_file_no_file(client):
     resp_data = json.loads(response.data)
     assert resp_data['message'] == 'No file part'
 
+from unittest.mock import patch, MagicMock
+
+def test_upload_file_ssh_proxy(client, test_data_dir):
+    data = {
+        'file': (io.BytesIO(b"test content"), 'testfile.txt'),
+        'ssh_target': 'user@host',
+        'ssh_dir': '/remote/dir'
+    }
+    with patch('src.app.subprocess.run') as mock_run, \
+         patch('src.app.validate_ssh_target', return_value=True), \
+         patch('src.app.get_config_paths', return_value=('/tmp', '/tmp/config', '/tmp/ssh_dir')):
+        
+        mock_run.return_value = MagicMock(returncode=0)
+        response = client.post('/api/upload', data=data, content_type='multipart/form-data')
+        
+        assert response.status_code == 200
+        resp_data = json.loads(response.data)
+        assert resp_data['status'] == 'success'
+        assert resp_data['filename'] == 'testfile.txt'
+
+        assert mock_run.call_count == 2
+        ssh_call = mock_run.call_args_list[0][0][0]
+        scp_call = mock_run.call_args_list[1][0][0]
+        
+        assert ssh_call[0] == 'ssh'
+        assert 'user@host' in ssh_call
+        assert any('mkdir -p' in arg for arg in ssh_call)
+        
+        assert scp_call[0] == 'scp'
+        assert 'user@host:/remote/dir/testfile.txt' in scp_call
+
+def test_upload_file_ssh_proxy_home_dir(client, test_data_dir):
+    data = {
+        'file': (io.BytesIO(b"test content"), 'testfile.txt'),
+        'ssh_target': 'user@host',
+        'ssh_dir': '~'
+    }
+    with patch('src.app.subprocess.run') as mock_run, \
+         patch('src.app.validate_ssh_target', return_value=True), \
+         patch('src.app.get_config_paths', return_value=('/tmp', '/tmp/config', '/tmp/ssh_dir')):
+        
+        mock_run.return_value = MagicMock(returncode=0)
+        response = client.post('/api/upload', data=data, content_type='multipart/form-data')
+        
+        assert response.status_code == 200
+        
+        # In this case, remote_dir is empty string, so ssh mkdir is not called
+        assert mock_run.call_count == 1
+        scp_call = mock_run.call_args_list[0][0][0]
+        
+        assert scp_call[0] == 'scp'
+        assert 'user@host:testfile.txt' in scp_call
+
 def test_download_file_success(client, test_data_dir):
     # Setup file in workspace
     workspace_dir = os.path.join(test_data_dir, 'workspace')

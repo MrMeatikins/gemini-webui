@@ -55,7 +55,61 @@
         let titleFlashInterval = null;
         let originalPageTitle = 'Gemini WebUI';
 
-        let hostHealthStates = {};
+        const HostStateManager = {
+            states: {},
+            
+            updateState: function(label, isSuccess) {
+                if (!this.states[label]) this.states[label] = { failures: -1 };
+                
+                if (isSuccess) {
+                    this.states[label].failures = 0;
+                } else {
+                    if (this.states[label].failures < 0) this.states[label].failures = 2;
+                    else this.states[label].failures++;
+                }
+                
+                return this.states[label].failures;
+            },
+            
+            getIndicator: function(failures) {
+                if (failures === 0) return '🟢';
+                if (failures === 1) return '🟡';
+                if (failures < 0) return '⚪';
+                return '🔴';
+            },
+
+            renderHealthUI: function(tabId, label, failures) {
+                const indicatorId = `${tabId}_health_${label.replace(/[^a-z0-9]/gi, '')}`;
+                const el = document.getElementById(indicatorId);
+                if (el) {
+                    el.innerText = this.getIndicator(failures);
+                }
+            },
+
+            triggerPulse: function(tabId, label) {
+                const pulseId = `${tabId}_pulse_${label.replace(/[^a-z0-9]/gi, '')}`;
+                const pulseEl = document.getElementById(pulseId);
+                if (pulseEl) {
+                    pulseEl.classList.remove('pulsing');
+                    void pulseEl.offsetWidth; // trigger reflow
+                    pulseEl.classList.add('pulsing');
+                }
+            },
+
+            updateHealth: function(tabId, label, isSuccess, shouldPulse = true) {
+                const failures = this.updateState(label, isSuccess);
+                this.renderHealthUI(tabId, label, failures);
+                if (shouldPulse) {
+                    this.triggerPulse(tabId, label);
+                }
+            },
+            
+            getInitialIndicator: function(label) {
+                if (!this.states[label]) return '⚪';
+                return this.getIndicator(this.states[label].failures);
+            }
+        };
+
         let wakeLock = null;
 
         async function updateWakeLock() {
@@ -88,24 +142,7 @@
         });
 
         function updateHostHealthIndicator(tabId, label, isSuccess) {
-            if (!hostHealthStates[label]) hostHealthStates[label] = { failures: -1 }; // Start at unknown
-            
-            if (isSuccess) {
-                hostHealthStates[label].failures = 0;
-            } else {
-                if (hostHealthStates[label].failures < 0) hostHealthStates[label].failures = 2;
-                else hostHealthStates[label].failures++;
-            }
-
-            const indicatorId = `${tabId}_health_${label.replace(/[^a-z0-9]/gi, '')}`;
-            const el = document.getElementById(indicatorId);
-            if (el) {
-                const f = hostHealthStates[label].failures;
-                if (f === 0) el.innerText = '🟢';
-                else if (f === 1) el.innerText = '🟡';
-                else if (f < 0) el.innerText = '⚪';
-                else el.innerText = '🔴';
-            }
+            HostStateManager.updateHealth(tabId, label, isSuccess, true);
         }
 
         function updatePageTitle() {
@@ -433,14 +470,7 @@
                 const healthId = `${id}_health_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
                 const pulseId = `${id}_pulse_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
                 
-                let initialIndicator = '⚪';
-                if (hostHealthStates[conn.label]) {
-                    const f = hostHealthStates[conn.label].failures;
-                    if (f === 0) initialIndicator = '🟢';
-                    else if (f === 1) initialIndicator = '🟡';
-                    else if (f < 0) initialIndicator = '⚪';
-                    else initialIndicator = '🔴';
-                }
+                let initialIndicator = HostStateManager.getInitialIndicator(conn.label);
 
                 card.innerHTML = `
                     <div class="connection-header">
@@ -631,16 +661,6 @@
             if (useCache) query.set('cache', 'true');
             query.set('bg', 'true'); // ALWAYS use background fetching to avoid blocking server
 
-            if (!useCache && !isPolling) {
-                const pulseId = `${tabId}_pulse_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
-                const pulseEl = document.getElementById(pulseId);
-                if (pulseEl) {
-                    pulseEl.classList.remove('pulsing');
-                    void pulseEl.offsetWidth; // trigger reflow to restart animation
-                    pulseEl.classList.add('pulsing');
-                }
-            }
-
             try {
                 const response = await fetch('/api/sessions?' + query.toString());
                 if (!response.ok) throw new Error("HTTP error " + response.status);
@@ -655,7 +675,10 @@
                     return;
                 }
 
-                if (!useCache || isPolling) updateHostHealthIndicator(tabId, conn.label, !data.error);
+                if (!useCache || isPolling) {
+                    const shouldPulse = !useCache && !isPolling;
+                    HostStateManager.updateHealth(tabId, conn.label, !data.error, shouldPulse);
+                }
 
                 const listEl = document.getElementById(targetId); if (!listEl) return;
                 if (data.error) {
@@ -691,7 +714,10 @@
                 }
                 if (useCache && !isPolling) fetchSessions(tabId, conn, targetId, forceAll, false); // Update after cache load
             } catch (e) {
-                if (!useCache || isPolling) updateHostHealthIndicator(tabId, conn.label, false);
+                if (!useCache || isPolling) {
+                    const shouldPulse = !useCache && !isPolling;
+                    HostStateManager.updateHealth(tabId, conn.label, false, shouldPulse);
+                }
                 console.error(e);
             }
         }

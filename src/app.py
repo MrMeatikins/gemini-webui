@@ -1,5 +1,9 @@
 import os
-if os.environ.get('SKIP_MONKEY_PATCH') != 'true':
+try:
+    from config import env_config
+except ImportError:
+    from src.config import env_config
+if not env_config.SKIP_MONKEY_PATCH:
     import eventlet
     eventlet.monkey_patch()
 
@@ -18,6 +22,7 @@ import shutil
 import shlex
 import socket
 import datetime
+import threading
 from functools import wraps
 from flask import Flask, render_template, request, Response, session, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
@@ -36,15 +41,15 @@ except ImportError:
 
 # Global config holder and defaults
 config = {}
-GEMINI_BIN = os.environ.get('GEMINI_BIN', 'gemini')
-ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
-ADMIN_PASS = os.environ.get('ADMIN_PASS', 'admin')
-LDAP_SERVER = os.environ.get('LDAP_SERVER')
-LDAP_BASE_DN = os.environ.get('LDAP_BASE_DN')
-LDAP_BIND_USER_DN = os.environ.get('LDAP_BIND_USER_DN')
-LDAP_BIND_PASS = os.environ.get('LDAP_BIND_PASS')
-LDAP_AUTHORIZED_GROUP = os.environ.get('LDAP_AUTHORIZED_GROUP')
-LDAP_FALLBACK_DOMAIN = os.environ.get('LDAP_FALLBACK_DOMAIN', 'example.com')
+GEMINI_BIN = env_config.GEMINI_BIN
+ADMIN_USER = env_config.ADMIN_USER
+ADMIN_PASS = env_config.ADMIN_PASS
+LDAP_SERVER = env_config.LDAP_SERVER
+LDAP_BASE_DN = env_config.LDAP_BASE_DN
+LDAP_BIND_USER_DN = env_config.LDAP_BIND_USER_DN
+LDAP_BIND_PASS = env_config.LDAP_BIND_PASS
+LDAP_AUTHORIZED_GROUP = env_config.LDAP_AUTHORIZED_GROUP
+LDAP_FALLBACK_DOMAIN = env_config.LDAP_FALLBACK_DOMAIN
 
 # SECURITY PARADIGM: Fail-Closed Logging
 logging.basicConfig(level=logging.INFO)
@@ -57,7 +62,8 @@ csrf = CSRFProtect(app)
 try:
     with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'VERSION'), 'r') as f:
         APP_VERSION = f.read().strip()
-except Exception:
+except Exception as e:
+    logger.warning(f"Failed to read VERSION: {e}")
     APP_VERSION = "unknown"
 
 @app.context_processor
@@ -71,13 +77,14 @@ session_manager = SessionManager()
 
 # Background session cache: key -> {"output": str, "error": str, "timestamp": float}
 session_results_cache = {}
+session_results_cache_lock = threading.Lock()
 
 # Precompile terminal ID regex for performance
 IDENTIFICATION_REGEX = re.compile(r'\x1b\[\??\d+(?:;\d+)*c')
 
 def cleanup_orphaned_ptys():
     """Cleanup orphaned sessions based on ORPHANED_SESSION_TTL."""
-    is_testing = app.config.get('TESTING') or os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true'
+    is_testing = app.config.get('TESTING') or env_config.BYPASS_AUTH_FOR_TESTING
     while True:
         try:
             ttl = app.config.get('ORPHANED_SESSION_TTL', 3600)
@@ -97,7 +104,7 @@ def cleanup_orphaned_ptys():
         socketio.sleep(60)
 
 def get_config_paths():
-    data_dir = app.config.get('DATA_DIR', os.environ.get('DATA_DIR', "/data"))
+    data_dir = app.config.get('DATA_DIR', env_config.DATA_DIR)
     
     # Check if data_dir is writable
     data_writable = os.access(data_dir if os.path.exists(data_dir) else os.path.dirname(data_dir.rstrip('/')), os.W_OK)
@@ -124,7 +131,7 @@ def get_config():
         "LDAP_BIND_PASS": LDAP_BIND_PASS,
         "LDAP_AUTHORIZED_GROUP": LDAP_AUTHORIZED_GROUP,
         "LDAP_FALLBACK_DOMAIN": LDAP_FALLBACK_DOMAIN,
-        "ALLOWED_ORIGINS": os.environ.get('ALLOWED_ORIGINS', '*'),
+        "ALLOWED_ORIGINS": env_config.ALLOWED_ORIGINS,
         "DATA_WRITABLE": os.access(os.path.dirname(config_file), os.W_OK),
         "TMP_WRITABLE": os.access("/tmp", os.W_OK),
         "HOSTS": [
@@ -146,7 +153,11 @@ def init_app():
     global config, ADMIN_USER, ADMIN_PASS, LDAP_SERVER, LDAP_BASE_DN, LDAP_BIND_USER_DN, LDAP_BIND_PASS, LDAP_AUTHORIZED_GROUP, LDAP_FALLBACK_DOMAIN
     data_dir, config_file, ssh_dir = get_config_paths()
     logger.info(f"Initializing app with DATA_DIR: {data_dir}")
-    
+
+    if not getattr(app, '_blueprints_registered', False):
+        register_blueprints(app)
+        app._blueprints_registered = True
+
     # Try FS operations but don't crash if they fail (RO filesystem)
     try:
         os.makedirs(ssh_dir, mode=0o700, exist_ok=True)
@@ -163,7 +174,8 @@ def init_app():
                     for root, dirs, files in os.walk(path):
                         for d in dirs: shutil.chown(os.path.join(root, d), user='node', group='node')
                         for f in files: shutil.chown(os.path.join(root, f), user='node', group='node')
-            except Exception: pass
+            except Exception as e:
+                logger.warning(f"Failed to fix permissions on {path}: {e}")
         
         # Generate instance SSH key if not exists
         key_path = os.path.join(ssh_dir, 'id_ed25519')
@@ -177,7 +189,8 @@ def init_app():
                 shutil.chown(key_path, user='node', group='node')
                 shutil.chown(key_path + '.pub', user='node', group='node')
                 os.chmod(key_path, 0o600)
-            except Exception: pass
+            except Exception as e:
+                logger.warning(f"Failed to generate SSH key: {e}")
     except Exception as e:
         logger.warning(f"FS initialization partially failed (likely RO filesystem): {e}")
 
@@ -192,7 +205,8 @@ def init_app():
         elif not os.path.exists(home_gemini):
             os.makedirs(os.path.dirname(home_gemini), exist_ok=True)
             os.symlink(gemini_data, home_gemini)
-    except Exception: pass
+    except Exception as e:
+        logger.warning(f"Failed to manage symlink for {home_gemini}: {e}")
     
     config = get_config()
     ADMIN_USER = config.get('ADMIN_USER', ADMIN_USER)
@@ -207,7 +221,7 @@ def init_app():
     # Load secret key from config (env) or generate one
     import secrets
     fallback_key = secrets.token_hex(32)
-    secret_key = config.get('SECRET_KEY') or os.environ.get('SECRET_KEY') or fallback_key
+    secret_key = config.get('SECRET_KEY') or env_config.SECRET_KEY or fallback_key
 
     app.config.update(
         SECRET_KEY=secret_key,
@@ -254,11 +268,11 @@ Talisman(app,
          session_cookie_secure=False) # Set to True if proxy handles SSL
 
 # Only allow origins from environment or localhost
-if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true':
+if env_config.BYPASS_AUTH_FOR_TESTING:
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 else:
     # Default to '*' for ease of use if not specified, but log it
-    allowed_origins_raw = os.environ.get('ALLOWED_ORIGINS')
+    allowed_origins_raw = env_config.ALLOWED_ORIGINS_RAW
     if allowed_origins_raw:
         allowed_origins = allowed_origins_raw.split(',')
     else:
@@ -274,7 +288,7 @@ def authenticate():
 def authenticated_only(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
-        bypass = os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true'
+        bypass = env_config.BYPASS_AUTH_FOR_TESTING
         is_auth = session.get('authenticated')
         if bypass or is_auth:
             return f(*args, **kwargs)
@@ -283,7 +297,7 @@ def authenticated_only(f):
 
 @socketio.on('connect')
 def handle_connect():
-    if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true':
+    if env_config.BYPASS_AUTH_FOR_TESTING:
         return True
     if not session.get('authenticated'):
         return False
@@ -299,7 +313,7 @@ def handle_disconnect():
 
 @app.before_request
 def require_auth():
-    if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true' or app.config.get('BYPASS_AUTH_FOR_TESTING') == 'true':
+    if env_config.BYPASS_AUTH_FOR_TESTING or app.config.get('BYPASS_AUTH_FOR_TESTING') == 'true':
         session['authenticated'] = True
         return
         
@@ -388,7 +402,9 @@ def background_session_preloader():
                 key = f"{host.get('type')}:{host.get('target', 'local')}:{host.get('dir', '')}"
                 logger.info(f"Background preloading sessions for: {host.get('label')}")
                 _, _, ssh_dir_path = get_config_paths()
-                session_results_cache[key] = fetch_sessions_for_host(host, ssh_dir_path, GEMINI_BIN)
+                res = fetch_sessions_for_host(host, ssh_dir_path, GEMINI_BIN)
+                with session_results_cache_lock:
+                    session_results_cache[key] = res
         except Exception as e:
             logger.error(f"Preloader error: {e}")
         # Only run once at startup, then sleep for a long time or until manually triggered
@@ -398,7 +414,7 @@ def background_session_preloader():
 @socketio.on('pty-input')
 def pty_input(data):
     sid = request.sid
-    user_id = session.get('user_id') or ('admin' if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true' else None)
+    user_id = session.get('user_id') or ('admin' if env_config.BYPASS_AUTH_FOR_TESTING else None)
     tab_id = session_manager.sid_to_tabid.get(sid)
     session_obj = session_manager.get_session(tab_id, user_id)
     if session_obj:
@@ -415,19 +431,19 @@ def pty_input(data):
 @socketio.on('resize')
 def pty_resize(data):
     sid = request.sid
-    user_id = session.get('user_id') or ('admin' if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true' else None)
+    user_id = session.get('user_id') or ('admin' if env_config.BYPASS_AUTH_FOR_TESTING else None)
     tab_id = session_manager.sid_to_tabid.get(sid)
     session_obj = session_manager.get_session(tab_id, user_id)
     if session_obj:
         try:
             set_winsize(session_obj.fd, data['rows'], data['cols'])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to set winsize on fd {session_obj.fd}: {e}")
 
 @socketio.on('restart')
 def pty_restart(data):
     sid = data.get('sid') or getattr(request, 'sid', None)
-    user_id = session.get('user_id') or ('admin' if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true' else None)
+    user_id = session.get('user_id') or ('admin' if env_config.BYPASS_AUTH_FOR_TESTING else None)
     tab_id = data.get('tab_id')
     if not tab_id:
         return
@@ -452,7 +468,8 @@ def pty_restart(data):
             # Re-sync terminal size
             try:
                 set_winsize(session_obj.fd, data.get('rows', 24), data.get('cols', 80))
-            except Exception: pass
+            except Exception as e:
+                logger.warning(f"Failed to set winsize on fd {session_obj.fd}: {e}")
             return
         else:
             logger.warning(f"Reclaim failed for session {tab_id}. Creating a fresh session.")
@@ -481,7 +498,8 @@ def pty_restart(data):
             try:
                 os.kill(oldest_session.pid, signal.SIGKILL)
                 os.waitpid(oldest_session.pid, 0)
-            except Exception: pass
+            except Exception as e:
+                logger.warning(f"Failed to kill evicted session {oldest_session.pid}: {e}")
     
     # Explicit restart or session not found: Clean up old one first
     old_session = session_manager.remove_session(tab_id, user_id)
@@ -490,7 +508,8 @@ def pty_restart(data):
         try:
             os.kill(old_session.pid, signal.SIGKILL)
             os.waitpid(old_session.pid, 0)
-        except Exception: pass
+        except Exception as e:
+            logger.warning(f"Failed to kill old session {old_session.pid}: {e}")
             
     resume = data.get('resume', True)
     if isinstance(resume, str):
@@ -531,7 +550,7 @@ def pty_restart(data):
         session_manager.reclaim_session(tab_id, sid, user_id, on_steal=handle_steal) # Connect current SID
         
         try: set_winsize(fd, rows, cols)
-        except Exception: pass
+        except Exception as e: logger.warning(f"Failed to set winsize on fd {fd}: {e}")
         socketio.emit('pty-output', {'output': '\x1b[2mLoading Context...\x1b[0m\r\n'}, room=sid)
 
 @app.route('/')
@@ -553,23 +572,18 @@ def service_worker():
     response.headers['Service-Worker-Allowed'] = '/'
     return response
 
-@app.route('/api/hosts', methods=['GET'])
-@authenticated_only
-def list_hosts():
-    return jsonify(get_config().get('HOSTS', []))
-
 @app.route('/api/management/sessions', methods=['GET'])
 @authenticated_only
 def list_active_sessions():
     """List all active/orphaned sessions managed by the backend for current user."""
-    user_id = session.get('user_id') or ('admin' if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true' else None)
+    user_id = session.get('user_id') or ('admin' if env_config.BYPASS_AUTH_FOR_TESTING else None)
     return jsonify(session_manager.list_sessions(user_id))
 
 @app.route('/api/management/sessions/<tab_id>', methods=['DELETE'])
 @authenticated_only
 def terminate_managed_session(tab_id):
     """Terminate a backend managed session and kill its process."""
-    user_id = session.get('user_id') or ('admin' if os.environ.get('BYPASS_AUTH_FOR_TESTING') == 'true' else None)
+    user_id = session.get('user_id') or ('admin' if env_config.BYPASS_AUTH_FOR_TESTING else None)
 
     if not tab_id:
         return jsonify({"error": "Tab ID required"}), 400        
@@ -597,27 +611,34 @@ def list_gemini_sessions():
     use_cache = request.args.get('cache') == 'true'
     bg = request.args.get('bg') == 'true'
 
-    if use_cache and cache_key in session_results_cache:
-        return jsonify(session_results_cache[cache_key])
+    if use_cache:
+        with session_results_cache_lock:
+            if cache_key in session_results_cache:
+                return jsonify(session_results_cache[cache_key])
 
     if bg:
-        if not hasattr(list_gemini_sessions, 'fetching_locks'):
-            list_gemini_sessions.fetching_locks = set()
+        with session_results_cache_lock:
+            if not hasattr(list_gemini_sessions, 'fetching_locks'):
+                list_gemini_sessions.fetching_locks = set()
+            should_fetch = cache_key not in list_gemini_sessions.fetching_locks
+            if should_fetch:
+                list_gemini_sessions.fetching_locks.add(cache_key)
 
-        if cache_key not in list_gemini_sessions.fetching_locks:
-            list_gemini_sessions.fetching_locks.add(cache_key)
-
+        if should_fetch:
             def background_fetch(target, directory, key):
                 try:
                     _, _, ssh_dir_path = get_config_paths()
                     res = fetch_sessions_for_host({'target': target, 'dir': directory, 'type': 'ssh' if target else 'local'}, ssh_dir_path, GEMINI_BIN)
-                    session_results_cache[key] = res
+                    with session_results_cache_lock:
+                        session_results_cache[key] = res
                 except Exception as e:
                     logger.error(f"Background fetch error: {e}")
-                    session_results_cache[key] = {"error": str(e)}
+                    with session_results_cache_lock:
+                        session_results_cache[key] = {"error": str(e)}
                 finally:
-                    if key in list_gemini_sessions.fetching_locks:
-                        list_gemini_sessions.fetching_locks.remove(key)
+                    with session_results_cache_lock:
+                        if key in list_gemini_sessions.fetching_locks:
+                            list_gemini_sessions.fetching_locks.remove(key)
 
             socketio.start_background_task(background_fetch, ssh_target, ssh_dir, cache_key)
 
@@ -628,65 +649,11 @@ def list_gemini_sessions():
     err = result.get('error')
     if err and 'timeout' in err.lower():
         return jsonify(result), 504
-    session_results_cache[cache_key] = result
+    
+    with session_results_cache_lock:
+        session_results_cache[cache_key] = result
+        
     return jsonify(result)
-@app.route('/api/hosts', methods=['POST'])
-@authenticated_only
-def add_host():
-    new_host = request.json
-    label = new_host.get('label')
-    old_label = new_host.get('old_label')
-    if not label:
-        return jsonify({"status": "error", "message": "Label is required"}), 400
-        
-    curr_conf = get_config()
-    hosts = curr_conf.get('HOSTS', [])
-    
-    # Check if we are updating an existing host (by new label or explicitly provided old label)
-    found_idx = -1
-    search_label = old_label if old_label else label
-    
-    for i, h in enumerate(hosts):
-        if h['label'] == search_label:
-            found_idx = i
-            break
-    
-    if found_idx != -1:
-        # Update in place to retain position
-        hosts[found_idx] = {k: v for k, v in new_host.items() if k != 'old_label'}
-    else:
-        # Add to end
-        hosts.append({k: v for k, v in new_host.items() if k != 'old_label'})
-        
-    curr_conf['HOSTS'] = hosts
-    _, config_file, _ = get_config_paths()
-    with open(config_file, 'w') as f: json.dump(curr_conf, f, indent=4)
-    return jsonify({"status": "success"})
-
-@app.route('/api/hosts/reorder', methods=['POST'])
-@authenticated_only
-def reorder_hosts():
-    new_order = request.json # Expect list of labels
-    curr_conf = get_config()
-    hosts = curr_conf.get('HOSTS', [])
-    
-    reordered = []
-    host_map = {h['label']: h for h in hosts}
-    for label in new_order:
-        if label in host_map:
-            reordered.append(host_map[label])
-            
-    # Add any missing hosts at the end
-    existing_labels = set(new_order)
-    for h in hosts:
-        if h['label'] not in existing_labels:
-            reordered.append(h)
-            
-    curr_conf['HOSTS'] = reordered
-    _, config_file, _ = get_config_paths()
-    with open(config_file, 'w') as f: json.dump(curr_conf, f, indent=4)
-    return jsonify({"status": "success"})
-
 @app.route('/api/sessions/terminate', methods=['POST'])
 @authenticated_only
 def terminate_remote_session():
@@ -724,23 +691,13 @@ def terminate_remote_session():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/hosts/<label>', methods=['DELETE'])
-@authenticated_only
-def remove_host(label):
-    if label == "local":
-        return jsonify({"status": "error", "message": "Cannot delete local box"}), 403
-    curr_conf = get_config()
-    hosts = curr_conf.get('HOSTS', [])
-    hosts = [h for h in hosts if h['label'] != label]
-    curr_conf['HOSTS'] = hosts
-    _, config_file, _ = get_config_paths()
-    with open(config_file, 'w') as f: json.dump(curr_conf, f, indent=4)
-    return jsonify({"status": "success"})
-
 @app.route('/api/config', methods=['GET'])
 @authenticated_only
 def get_current_config():
-    return jsonify(get_config())
+    conf = get_config()
+    conf.pop('LDAP_BIND_PASS', None)
+    conf.pop('ADMIN_PASS', None)
+    return jsonify(conf)
 
 @app.route('/api/config', methods=['POST'])
 @authenticated_only
@@ -751,141 +708,6 @@ def update_config():
     _, config_file, _ = get_config_paths()
     with open(config_file, 'w') as f: json.dump(curr_conf, f, indent=4)
     return jsonify({"status": "success"})
-
-@app.route('/api/keys', methods=['GET'])
-@authenticated_only
-def list_ssh_keys():
-    _, _, ssh_dir = get_config_paths()
-    keys = []
-    if os.path.exists(ssh_dir):
-        for f in os.listdir(ssh_dir):
-            if os.path.isfile(os.path.join(ssh_dir, f)) and f not in ['config', 'known_hosts']:
-                keys.append(f)
-    return jsonify(keys)
-
-@app.route('/api/keys/public', methods=['GET'])
-@authenticated_only
-def get_public_key():
-    _, _, ssh_dir = get_config_paths()
-    pub_key_path = os.path.join(ssh_dir, "id_ed25519.pub")
-    if os.path.exists(pub_key_path):
-        with open(pub_key_path, 'r') as f:
-            return jsonify({"key": f.read().strip()})
-    return jsonify({"error": "Public key not found"}), 404
-
-@app.route('/api/keys/rotate', methods=['POST'])
-@authenticated_only
-def rotate_instance_key():
-    _, _, ssh_dir = get_config_paths()
-    key_path = os.path.join(ssh_dir, 'id_ed25519')
-    try:
-        # Backup old key just in case
-        if os.path.exists(key_path):
-            timestamp = int(time.time())
-            shutil.move(key_path, f"{key_path}.{timestamp}.bak")
-            if os.path.exists(key_path + ".pub"):
-                shutil.move(key_path + ".pub", f"{key_path}.{timestamp}.pub.bak")
-        
-        hostname = socket.gethostname()
-        datestr = datetime.datetime.now().strftime('%Y%m%d')
-        comment = f"gemini-webui-{hostname}-{datestr}"
-        logger.info(f"Rotating instance SSH key with comment: {comment}...")
-        subprocess.run(['ssh-keygen', '-t', 'ed25519', '-N', '', '-f', key_path, '-C', comment], check=True)
-        try:
-            shutil.chown(key_path, user='node', group='node')
-            shutil.chown(key_path + '.pub', user='node', group='node')
-        except (LookupError, PermissionError):
-            pass
-        os.chmod(key_path, 0o600)
-        
-        with open(key_path + '.pub', 'r') as f:
-            return jsonify({"status": "success", "key": f.read().strip()})
-    except Exception as e:
-        logger.error(f"Failed to rotate SSH key: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/keys/text', methods=['POST'])
-@authenticated_only
-def add_ssh_key_text():
-    if request.content_length and request.content_length > 10 * 1024:
-        return jsonify({"status": "error", "message": "Payload too large"}), 400
-
-    data = request.json
-    if not isinstance(data, dict):
-        return jsonify({"status": "error", "message": "Invalid JSON payload"}), 400
-
-    raw_name = data.get('name')
-    if not isinstance(raw_name, str):
-        return jsonify({"status": "error", "message": "Invalid name format"}), 400
-
-    name = secure_filename(raw_name)
-    key_text = data.get('key')
-    
-    if not name or not key_text:
-        return jsonify({"status": "error", "message": "Name and key are required"}), 400
-        
-    if not isinstance(key_text, str) or len(key_text) > 10 * 1024:
-        return jsonify({"status": "error", "message": "Invalid key format or size"}), 400
-
-    valid_prefixes = ('-----BEGIN ', 'ssh-', 'ecdsa-')
-    if not any(key_text.lstrip().startswith(prefix) for prefix in valid_prefixes):
-        return jsonify({"status": "error", "message": "Invalid SSH key format"}), 400
-
-    if not key_text.endswith('\n'): key_text += '\n'
-    _, _, ssh_dir = get_config_paths()
-    save_path = os.path.join(ssh_dir, name)
-    with open(save_path, 'w', encoding='utf-8') as f: f.write(key_text)
-    os.chmod(save_path, 0o600)
-    return jsonify({"status": "success", "filename": name})
-
-@app.route('/api/keys/upload', methods=['POST'])
-@authenticated_only
-def upload_ssh_key():
-    if request.content_length and request.content_length > 10 * 1024:
-        return jsonify({"status": "error", "message": "Payload too large"}), 400
-
-    if 'file' not in request.files:
-        return jsonify({"status": "error", "message": "No file part"}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"status": "error", "message": "No selected file"}), 400
-    
-    filename = secure_filename(file.filename)
-    if not filename:
-        return jsonify({"status": "error", "message": "Invalid filename"}), 400
-        
-    key_content = file.read(10 * 1024 + 1)
-    if len(key_content) > 10 * 1024:
-        return jsonify({"status": "error", "message": "File too large"}), 400
-
-    try:
-        key_text = key_content.decode('utf-8')
-    except UnicodeDecodeError:
-        return jsonify({"status": "error", "message": "Invalid file encoding"}), 400
-
-    valid_prefixes = ('-----BEGIN ', 'ssh-', 'ecdsa-')
-    if not any(key_text.lstrip().startswith(prefix) for prefix in valid_prefixes):
-        return jsonify({"status": "error", "message": "Invalid SSH key format"}), 400
-
-    _, _, ssh_dir = get_config_paths()
-    save_path = os.path.join(ssh_dir, filename)
-    with open(save_path, 'wb') as f:
-        f.write(key_content)
-    # Check if the file is a private key or a public key by looking at extension.
-    # Public keys don't need strict permissions, but giving them 600 is fine.
-    os.chmod(save_path, 0o600)
-    return jsonify({"status": "success", "filename": filename})
-
-@app.route('/api/keys/<filename>', methods=['DELETE'])
-@authenticated_only
-def remove_ssh_key(filename):
-    filename = secure_filename(filename)
-    _, _, ssh_dir = get_config_paths()
-    path = os.path.join(ssh_dir, filename)
-    if os.path.exists(path):
-        os.remove(path)
-        return jsonify({"status": "success"})
-    return jsonify({"status": "error", "message": "File not found"}), 404
 
 @app.route('/api/upload', methods=['POST'])
 @authenticated_only
@@ -910,7 +732,7 @@ def upload_file():
     if not filename:
         return jsonify({"status": "error", "message": "Invalid filename"}), 400
 
-    workspace_dir = os.path.join(os.environ.get("DATA_DIR", "/data"), "workspace")
+    workspace_dir = os.path.join(env_config.DATA_DIR, "workspace")
     
     # Ensure save path is within workspace
     base_path = os.path.abspath(workspace_dir)
@@ -920,12 +742,53 @@ def upload_file():
         
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     file.save(save_path)
+
+    ssh_target = request.form.get('ssh_target')
+    if ssh_target:
+        if not validate_ssh_target(ssh_target):
+            return jsonify({"status": "error", "message": "Invalid SSH target"}), 400
+
+        ssh_dir = request.form.get('ssh_dir')
+        _, _, ssh_dir_path = get_config_paths()
+        
+        # Build base SSH arguments
+        base_ssh_args = ['-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=no']
+        known_hosts_path = os.path.join(ssh_dir_path, 'known_hosts')
+        base_ssh_args.extend(['-o', f'UserKnownHostsFile={known_hosts_path}'])
+        if os.path.exists(ssh_dir_path):
+            for f in os.listdir(ssh_dir_path):
+                if os.path.isfile(os.path.join(ssh_dir_path, f)) and f not in ['config', 'known_hosts'] and not f.endswith('.pub'):
+                    base_ssh_args.extend(['-i', os.path.join(ssh_dir_path, f)])
+
+        # Determine remote path
+        remote_path = filename
+        if ssh_dir and ssh_dir != "~":
+            if ssh_dir.startswith('~'):
+                remote_path = f"{ssh_dir}/{filename}"
+            else:
+                remote_path = os.path.join(ssh_dir, filename).replace('\\', '/')
+
+        # Ensure directory structure exists on remote
+        remote_dir = os.path.dirname(remote_path)
+        if remote_dir:
+            ssh_cmd = ['ssh'] + base_ssh_args + ['--', ssh_target, f"mkdir -p {shlex.quote(remote_dir)}"]
+            subprocess.run(ssh_cmd)
+
+        # Run SCP
+        scp_cmd = ['scp'] + base_ssh_args + ['--', save_path, f"{ssh_target}:{remote_path}"]
+        try:
+            result = subprocess.run(scp_cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                return jsonify({"status": "error", "message": f"SCP failed: {result.stderr}"}), 500
+        except Exception as e:
+            return jsonify({"status": "error", "message": f"SCP error: {str(e)}"}), 500
+
     return jsonify({"status": "success", "filename": filename})
 
 @app.route('/api/download/<path:filename>', methods=['GET'])
 @authenticated_only
 def download_file(filename):
-    workspace_dir = os.path.join(os.environ.get("DATA_DIR", "/data"), "workspace")
+    workspace_dir = os.path.join(env_config.DATA_DIR, "workspace")
     
     # Securely resolve the path and prevent directory traversal
     try:
@@ -959,14 +822,18 @@ def health_check_root():
 def health_check():
     return jsonify({"status": "ok"})
 
+def register_blueprints(app_instance):
+    from src.host_key_routes import host_key_bp
+    app_instance.register_blueprint(host_key_bp)
+
 if __name__ == '__main__':
     init_app()
     if not app.config.get('TESTING'):
         socketio.start_background_task(read_and_forward_pty_output)
         socketio.start_background_task(cleanup_orphaned_ptys)
-        if os.environ.get('SKIP_PRELOADER') != 'true':
+        if not env_config.SKIP_PRELOADER:
             socketio.start_background_task(background_session_preloader)
     
-    debug_mode = os.environ.get('FLASK_DEBUG', 'true').lower() == 'true'
-    use_reloader = os.environ.get('FLASK_USE_RELOADER', 'true').lower() == 'true'
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=debug_mode, use_reloader=use_reloader)
+    debug_mode = env_config.FLASK_DEBUG
+    use_reloader = env_config.FLASK_USE_RELOADER
+    socketio.run(app, host='0.0.0.0', port=env_config.PORT, debug=debug_mode, use_reloader=use_reloader)

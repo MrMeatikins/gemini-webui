@@ -3,8 +3,9 @@ from src.auth_ldap import sanitize_ldap_input, check_auth
 
 def test_sanitize_ldap_input():
     assert sanitize_ldap_input("user") == "user"
-    assert sanitize_ldap_input("user(name)") == "username"
-    assert sanitize_ldap_input("user*") == "user"
+    assert sanitize_ldap_input("user(name)") == r"user\28name\29"
+    assert sanitize_ldap_input("user*") == r"user\2a"
+    assert sanitize_ldap_input("user\\") == r"user\5c"
     assert sanitize_ldap_input(None) == ""
 
 @patch('ldap3.Server')

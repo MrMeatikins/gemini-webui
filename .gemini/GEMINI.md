@@ -155,5 +155,7 @@ Once assigned, the execution proceeds as follows:
 1. **`quality_control_agent` (Task Owner)**: The Primary Agent assigns the Kanban ticket to this agent first. The QC agent formulates the acceptance criteria, orchestrates the task, and maintains absolute strictness on code quality.
 2. **`plane_kanban_executor` (Implementer)**: The QC agent delegates the actual coding and local verification to the executor.
 3. **The Loop**: The QC agent rigorously audits the executor's work. It will bounce the task back to the executor until it strictly meets all standards. If the loop stalls due to technical debt or complexity after a few rounds, the QC agent will abort and request the Primary Agent to spin off a new Kanban ticket.
+4. **Completion Variance**: If QA reports back saying it's complete but codebase investigator says otherwise, you have one of two options. 1. Create a new ticket to handle the edge cases 2. Reassign the ticket to a new QA Agent and explain the delta variance between current and expectations. If QA could not complete, then reassign the ticket to a new QA Agent and explain what previous QA agent said.
+5. **Timeboxing Testing**: When QA runs testing commands, particularly involving Playwright, they MUST timebox the commands (e.g., using `timeout 60s ...` or `--timeout` arguments) to ensure they do not hang indefinitely and consume all context. All test elements and commands must have explicit timeouts assigned.
 
 Stay efficient, stay secure. Good luck.

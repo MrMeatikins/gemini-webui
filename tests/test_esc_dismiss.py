@@ -82,4 +82,5 @@ def test_esc_dismiss_launcher(page):
     # Verify the launcher tab is NOT closed (as per new requirements)
     page.wait_for_timeout(1000) # wait to ensure no close happens
     expect(page.locator('.tab')).to_have_count(tabs_count)
-    expect(page.locator('.launcher').first).to_be_visible()
+    expect(page.locator('.launcher').first).to_be_hidden()
+    expect(page.locator('.terminal-instance').first).to_be_visible()

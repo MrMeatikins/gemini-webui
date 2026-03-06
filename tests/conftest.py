@@ -35,7 +35,7 @@ def server(test_data_dir):
     python_bin = os.path.join(project_root, ".venv", "bin", "python")
     
     process = subprocess.Popen(
-        [python_bin, "src/app.py"],
+        [python_bin, "-m", "src.app"],
         env=env,
         cwd=project_root,
         # stdout=subprocess.DEVNULL,
@@ -51,7 +51,7 @@ def server(test_data_dir):
             resp = requests.get(f"http://127.0.0.1:{port}/health", timeout=1)
             if resp.status_code == 200:
                 break
-        except Exception:
+        except requests.RequestException:
             pass
         time.sleep(1)
         if process.poll() is not None:
@@ -63,7 +63,7 @@ def server(test_data_dir):
     
     try:
         os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-    except Exception:
+    except OSError:
         pass
     process.wait()
 

@@ -1,3 +1,7 @@
+try:
+    from config import env_config
+except ImportError:
+    from src.config import env_config
 #!/usr/bin/env python3
 import sys
 

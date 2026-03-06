@@ -327,3 +327,62 @@ def test_ui_title_flashing_on_action_required(page):
     assert "⚠️ Action Required! ✋" not in final_title
 
 
+
+@pytest.mark.prone_to_timeout
+@pytest.mark.timeout(20)
+def test_ui_add_and_use_host(page, server):
+    """Verify that a user can add a host via the UI and connect to it without CSRF errors."""
+    # Ensure launcher is loaded
+    expect(page.get_by_text("Select a Connection").first).to_be_visible(timeout=5000)
+
+    # Open Settings to add host
+    page.locator('button:has-text("Settings")').click()
+    expect(page.locator("#settings-modal")).to_be_visible(timeout=5000)
+
+    # Fill in the new host details
+    print("Filling details")
+    page.locator("#new-host-label").fill("Test SSH Host")
+    page.locator("#new-host-target").fill("user@127.0.0.1")
+    page.locator("#new-host-dir").fill("/tmp")
+
+    # Click Add Host
+    print("Clicking Add Host")
+    with page.expect_response("**/api/hosts") as response_info:
+        page.locator("#add-host-btn").click()
+    
+    print("Got response")
+    response = response_info.value
+    assert response.status == 200, f"Failed to add host, status {response.status}"
+
+    print("Verifying host in list")
+    # Verify the host was added to the list in Settings
+    expect(page.locator("#hosts-list")).to_contain_text("Test SSH Host", timeout=5000)
+
+    print("Closing settings")
+    # Close settings
+    page.evaluate("closeSettings()")
+    expect(page.locator("#settings-modal")).not_to_be_visible(timeout=5000)
+
+    print("Verifying connection card")
+    # The new host should appear as a connection card
+    expect(page.locator(".connection-card").filter(has_text="Test SSH Host").first).to_be_visible(timeout=5000)
+
+    # Setup dialog handler to auto-accept the confirmation and handle alert
+    page.on("dialog", lambda dialog: dialog.accept())
+
+    print("Opening settings again to delete")
+    # Now verify we can delete it
+    page.locator('button:has-text("Settings")').click()
+    expect(page.locator("#settings-modal")).to_be_visible(timeout=5000)
+
+    print("Deleting host")
+    host_item = page.locator("#hosts-list .session-item").filter(has_text="Test SSH Host").first
+    with page.expect_response("**/api/hosts/*") as response_info:
+        host_item.locator('button:has-text("Delete")').click()
+    
+    print("Got delete response")
+    response = response_info.value
+    assert response.status == 200, f"Failed to delete host, status {response.status}"
+
+    print("Verifying host deleted")
+    expect(page.locator("#hosts-list")).not_to_contain_text("Test SSH Host", timeout=5000)

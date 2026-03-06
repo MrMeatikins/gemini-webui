@@ -72,7 +72,7 @@ done
     
     log_file = open(os.path.join(str(data_dir), "server.log"), "w")
     process = subprocess.Popen(
-        [python_bin, "src/app.py"],
+        [python_bin, "-m", "src.app"],
         env=env,
         cwd=project_root,
         preexec_fn=os.setsid,
@@ -87,7 +87,7 @@ done
             resp = requests.get(f"http://127.0.0.1:{port}/health", timeout=1)
             if resp.status_code == 200:
                 break
-        except Exception:
+        except requests.RequestException:
             pass
         time.sleep(1)
         if process.poll() is not None:
@@ -99,7 +99,7 @@ done
     
     try:
         os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-    except Exception:
+    except OSError:
         pass
     process.wait()
 

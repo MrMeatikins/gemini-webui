@@ -20,8 +20,8 @@ if "-r" in sys.argv:
         try:
             with open(STATE_FILE, 'r') as f:
                 memory = json.load(f)
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"Mock error loading state: {e}", file=sys.stderr)
 else:
     # Fresh start, clear state
     if os.path.exists(STATE_FILE):
