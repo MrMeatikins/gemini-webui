@@ -82,6 +82,13 @@
                             <input type="text" id="new-host-target" placeholder="user@host (blank for local)">
                             <input type="text" id="new-host-dir" placeholder="Path on host eg. ~/project">
                         </div>
+                        <div id="env-var-container" style="border: 1px solid #444; border-radius: 4px; padding: 10px; margin-top: 5px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <h4 style="margin: 0; font-size: 12px; color: #ccc;">Environment Variables</h4>
+                                <button type="button" class="small" id="add-env-var-btn" style="padding: 2px 5px; font-size: 11px;">+ Add</button>
+                            </div>
+                            <div id="env-vars-list" style="display: flex; flex-direction: column; gap: 5px;"></div>
+                        </div>
                     </div>
                     <button id="add-host-btn" class="success" style="margin-top: 10px; width: 100%;" onclick="submitHostForm()">Add Host</button>
                 </div>

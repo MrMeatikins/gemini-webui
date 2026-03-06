@@ -1,7 +1,7 @@
 import pytest
 import os
 from unittest.mock import patch
-from src.app import app, pty_input, pty_resize, handle_connect, handle_disconnect, session_manager, Session
+from src.app import app, pty_input, pty_resize, handle_connect, handle_disconnect, update_title, session_manager, Session
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
@@ -63,3 +63,16 @@ def test_connect_disconnect_logic():
             # Verify cleanup
             assert 'sid_new' not in session_manager.sid_to_tabid
             assert session_manager.get_session('tab_new', 'admin').orphaned_at is not None
+
+def test_update_title_handling():
+    with app.test_request_context('/'):
+        with patch('src.app.request') as mock_req:
+            mock_req.sid = 'sid_new'
+            session = Session('tab_new', 10, 123, 'admin', 'Old Title')
+            session_manager.add_session(session)
+            session_manager.reclaim_session('tab_new', 'sid_new', 'admin')
+            
+            assert session.title == 'Old Title'
+            
+            update_title({'tab_id': 'tab_new', 'title': 'New Working Title'})
+            assert session.title == 'New Working Title'

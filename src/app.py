@@ -31,7 +31,7 @@ from flask import Flask, render_template, request, Response, session, jsonify, s
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO
 from flask_talisman import Talisman
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from werkzeug.middleware.proxy_fix import ProxyFix
 try:
     from auth_ldap import check_auth
@@ -61,6 +61,12 @@ logger = logging.getLogger(__name__)
 template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 app = Flask(__name__, template_folder=template_dir)
 csrf = CSRFProtect(app)
+
+@app.errorhandler(CSRFError)
+def csrf_error(e):
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "CSRF token missing or incorrect", "reason": e.description}), 400
+    return f"CSRF Error: {e.description}", 400
 
 try:
     with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'VERSION'), 'r') as f:
@@ -414,6 +420,15 @@ def background_session_preloader():
         # For simplicity, we just do it once then sleep for an hour.
         socketio.sleep(3600)
 
+@socketio.on('update_title')
+def update_title(data):
+    sid = request.sid
+    user_id = session.get('user_id') or ('admin' if env_config.BYPASS_AUTH_FOR_TESTING else None)
+    tab_id = data.get('tab_id') or session_manager.sid_to_tabid.get(sid)
+    title = data.get('title')
+    if tab_id and title:
+        session_manager.update_title(tab_id, title, user_id)
+
 @socketio.on('pty-input')
 def pty_input(data):
     sid = request.sid
@@ -526,6 +541,13 @@ def pty_restart(data):
     ssh_target = data.get('ssh_target')
     ssh_dir = data.get('ssh_dir')
     
+    env_vars = None
+    if ssh_target:
+        for host in get_config().get('HOSTS', []):
+            if host.get('target') == ssh_target:
+                env_vars = host.get('env_vars')
+                break
+    
     (child_pid, fd) = pty.fork()
     if child_pid == 0:
         os.environ['TERM'] = 'xterm-256color'
@@ -533,7 +555,7 @@ def pty_restart(data):
         os.environ['FORCE_COLOR'] = '3'
         
         _, _, ssh_dir_path = get_config_paths()
-        cmd = build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, GEMINI_BIN)
+        cmd = build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, GEMINI_BIN, env_vars=env_vars)
         
         if not cmd:
             print("\r\nInvalid SSH target format\r\n")

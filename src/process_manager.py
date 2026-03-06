@@ -29,15 +29,21 @@ def build_ssh_args(ssh_target, ssh_dir_path):
                 cmd.extend(['-i', os.path.join(ssh_dir_path, f)])
     return cmd
 
-def get_remote_command_prefix(ssh_dir, gemini_bin='gemini'):
+import shlex
+
+def get_remote_command_prefix(ssh_dir, gemini_bin='gemini', env_vars=None):
     """Builds a robust prefix for remote commands to ensure PATH and environment are loaded."""
     # Common color and path exports
     prefix = "export PATH=\"$PATH:$HOME/.local/bin:$HOME/bin\"; "
     prefix += "export TERM=xterm-256color; export COLORTERM=truecolor; export FORCE_COLOR=3; "
-    
+
+    if env_vars and isinstance(env_vars, dict):
+        for k, v in env_vars.items():
+            if isinstance(k, str) and isinstance(v, str):
+                prefix += f"export {k}={shlex.quote(v)}; "
+
     # Source profiles quietly to populate PATH (e.g. npm globals, nvm, etc.)
-    prefix += "source ~/.profile 2>/dev/null; source ~/.bash_profile 2>/dev/null; source ~/.bashrc 2>/dev/null; "
-    
+    prefix += "source ~/.profile 2>/dev/null; source ~/.bash_profile 2>/dev/null; source ~/.bashrc 2>/dev/null; "    
     if ssh_dir and ssh_dir != "~":
         if ssh_dir.startswith('~'):
             suffix = ssh_dir[1:]
@@ -51,6 +57,7 @@ def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
     """Internal helper to fetch sessions for a host config."""
     ssh_target = host.get('target')
     ssh_dir = host.get('dir')
+    env_vars = host.get('env_vars')
     cmd = []
     if ssh_target:
         if not validate_ssh_target(ssh_target):
@@ -58,7 +65,7 @@ def fetch_sessions_for_host(host, ssh_dir_path, gemini_bin='gemini'):
             
         quoted_gemini = shlex.quote(gemini_bin)
         gemini_list_cmd = f"{quoted_gemini} --list-sessions"
-        remote_prefix = get_remote_command_prefix(ssh_dir, gemini_bin)
+        remote_prefix = get_remote_command_prefix(ssh_dir, gemini_bin, env_vars=env_vars)
         
         # Check for gemini before running list-sessions to avoid ugly bash errors
         remote_cmd = f"{remote_prefix} if command -v {quoted_gemini} >/dev/null 2>&1; then {gemini_list_cmd}; else exit 0; fi"
@@ -120,7 +127,7 @@ def _wrap_with_multiplexer(cmd):
     
     return cmd
 
-def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin='gemini'):
+def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin='gemini', env_vars=None):
     """Builds the shell/ssh command array for os.execvp when starting a PTY."""
     if ssh_target:
         if not validate_ssh_target(ssh_target):
@@ -135,7 +142,7 @@ def build_terminal_command(ssh_target, ssh_dir, resume, ssh_dir_path, gemini_bin
         elif resume and str(resume).lower() != 'false':
             gemini_base_cmd += f" -r {shlex.quote(str(resume))}"
         
-        remote_prefix = get_remote_command_prefix(ssh_dir, gemini_bin)
+        remote_prefix = get_remote_command_prefix(ssh_dir, gemini_bin, env_vars=env_vars)
         
         # Smart command construction: check for gemini, drop to shell if missing
         remote_cmd = f"{remote_prefix} if command -v {quoted_gemini} >/dev/null 2>&1; then "

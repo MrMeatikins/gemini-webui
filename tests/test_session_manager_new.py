@@ -101,3 +101,17 @@ def test_list_sessions():
     user2_sessions = manager.list_sessions("user2")
     assert len(user2_sessions) == 1
     assert user2_sessions[0]["tab_id"] == "tab-3"
+
+def test_update_title():
+    manager = SessionManager()
+    session = Session("tab-1", 10, 1000, "user1", "Local")
+    manager.add_session(session)
+    
+    assert session.title == "Local"
+    
+    manager.update_title("tab-1", "Working...", "user1")
+    assert session.title == "Working..."
+    
+    # Test invalid tab
+    manager.update_title("invalid-tab", "Should Not Apply", "user1")
+    assert session.title == "Working..."

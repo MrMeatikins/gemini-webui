@@ -45,3 +45,24 @@ def test_csrf_protection_with_token(client):
     client.delete('/api/hosts/test_host', headers={'X-CSRFToken': csrf_token})
 
     app.config['WTF_CSRF_ENABLED'] = False
+
+
+def test_csrf_failure_returns_json_for_api(client):
+    app.config['WTF_CSRF_ENABLED'] = True
+
+    # Make a DELETE request to /api/management/sessions/123 with an invalid CSRF token
+    response = client.delete('/api/management/sessions/123', headers={'X-CSRFToken': 'invalid-token'})
+
+    # Should fail with 400 Bad Request
+    assert response.status_code == 400
+    
+    # Assert the Content-Type is application/json
+    assert response.content_type == 'application/json'
+
+    # Assert the response body is valid JSON containing an "error" key
+    data = response.get_json()
+    assert data is not None
+    assert "error" in data
+    assert "CSRF token missing or incorrect" in data["error"]
+
+    app.config['WTF_CSRF_ENABLED'] = False

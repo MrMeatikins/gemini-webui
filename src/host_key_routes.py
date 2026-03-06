@@ -29,6 +29,21 @@ def add_host():
     if not label:
         return jsonify({"status": "error", "message": "Label is required"}), 400
         
+    env_vars = new_host.get('env_vars')
+    if env_vars is not None:
+        if not isinstance(env_vars, dict):
+            return jsonify({"status": "error", "message": "env_vars must be a dictionary"}), 400
+        if len(env_vars) > 20:
+            return jsonify({"status": "error", "message": "Too many environment variables"}), 400
+        import re
+        for k, v in env_vars.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                return jsonify({"status": "error", "message": "env_vars keys and values must be strings"}), 400
+            if len(k) > 255 or len(v) > 1024:
+                return jsonify({"status": "error", "message": "env_vars keys or values too long"}), 400
+            if not re.match(r'^[a-zA-Z0-9_]+$', k):
+                return jsonify({"status": "error", "message": "env_vars keys must be alphanumeric and underscores"}), 400
+
     curr_conf = get_config()
     hosts = curr_conf.get('HOSTS', [])
     

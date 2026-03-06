@@ -11,7 +11,7 @@ Gemini WebUI provides a high-fidelity, persistent web interface for the Gemini C
 *   **Multi-Environment Management**
     Manage multiple Gemini CLI instances across various computers, projects, and workspaces from a single, unified dashboard.
 *   **Mobile-First Design**
-    Experience a fully responsive UI equipped with mobile-friendly controls, enabling full Gemini CLI functionality on the go. Use mobile speech-to-text to communicate naturally with the Gemini CLI.
+    Experience a fully responsive UI equipped with mobile-friendly controls, enabling full Gemini CLI functionality on the go. Upload mobile screenshots from your phone, and describe problems using your mic to communicate naturally with the Gemini CLI.
 *   **Session Persistence**
     True cross-device persistence allows you to resume live sessions from your desktop directly on your phone or tablet without losing valuable context.
 *   **Seamless File Management**
@@ -25,6 +25,13 @@ Gemini WebUI provides a high-fidelity, persistent web interface for the Gemini C
     Robust support for scoped development or per-app system administrator setups, ensuring secure and isolated AI environments tailored to your needs.
 *   **Easy Deployment**
     Experience a frictionless quick start and simple installation process leveraging Docker and Docker Compose.
+
+## 💡 Example Use Cases
+
+*   **PDF Form Generation**: Upload a standard PDF document and ask Gemini to convert it into a fillable form.
+*   **Mobile Development Management**: Manage multiple software development chains, CI/CD pipelines, and remote deployments entirely from your phone.
+*   **Cross-Device Continuity**: Start a complex debugging or planning session on your desktop and seamlessly continue the exact same session on your phone or laptop while away from your desk.
+*   **Orchestrate Specialized AI Environments**: The "+New" screen provides a launchpad of environment cards. With a single tap, you can spin up and converse with dedicated, per-app Gemini instances—effectively granting you a menu of per-app system administrators to independently manage and scale your various projects and infrastructures.
 
 ## 🏗 Architecture Overview
 
