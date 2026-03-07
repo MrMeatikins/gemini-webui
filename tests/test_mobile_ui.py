@@ -57,7 +57,7 @@ done
     env["BYPASS_AUTH_FOR_TESTING"] = "true"
     env["SECRET_KEY"] = "testsecret"
     import random
-    port = str(random.randint(6000, 9000))
+    port = str(random.randint(10000, 15000))
     env["PORT"] = port
     env["ALLOWED_ORIGINS"] = "*"
     env["DATA_DIR"] = str(data_dir)
