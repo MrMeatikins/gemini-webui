@@ -106,7 +106,7 @@
                 }
             },
 
-            updateHealth: function(tabId, label, isSuccess, shouldPulse = true) {
+            updateHealth: function(tabId, label, isSuccess, shouldPulse = false) {
                 const prevClass = this.getInitialStatusClass(label);
                 const failures = this.updateState(label, isSuccess);
                 const newClass = this.getStatusClass(failures);
@@ -391,17 +391,10 @@
                     const statusClass = s.is_orphaned ? 'status-orphaned' : 'status-online';
                     const statusLabel = s.is_orphaned ? 'Orphaned' : 'Active';
 
-                    let shouldPulse = false;
+                    let shouldPulse = true; // Always pulse on update for animated indicators (active->active, etc)
                     const pulseId = `${id}_backend_pulse_${s.tab_id}`;
                     let pulseHtml = `<div id="${pulseId}" class="pulse-indicator"></div>`;
-                    
-                    if (backendSessionLastSeen[s.tab_id] && backendSessionLastSeen[s.tab_id] !== s.last_active) {
-                        shouldPulse = true;
-                    }
-                    if (backendSessionStatusClass[s.tab_id] && backendSessionStatusClass[s.tab_id] !== statusClass) {
-                        shouldPulse = true;
-                    }
-                    
+
                     backendSessionLastSeen[s.tab_id] = s.last_active;
                     backendSessionStatusClass[s.tab_id] = statusClass;
 
