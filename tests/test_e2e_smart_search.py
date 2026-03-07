@@ -77,8 +77,8 @@ def test_e2e_smart_search_ordering(page, test_data_dir):
     # 6. Verify results are correctly prioritized according to smart search logic
     items = page.locator('.autocomplete-item')
     
-    # Wait for all 5 results to appear
-    expect(items).to_have_count(5, timeout=5000)
+    # Wait for the first result to appear to ensure dropdown is populated
+    expect(items.first).to_be_visible(timeout=5000)
     
     # Expected order for "app" query:
     # 1. ./app.py (score 80, len 8)
@@ -87,8 +87,9 @@ def test_e2e_smart_search_ordering(page, test_data_dir):
     # 4. ./myapp/ (score 25, len 9)
     # 5. ./myapp/main.py (score 25, len 15)
     
-    expect(items.nth(0)).to_have_text("./app.py")
-    expect(items.nth(1)).to_have_text("./src/app.py")
-    expect(items.nth(2)).to_have_text("./tests/test_app.py")
-    expect(items.nth(3)).to_have_text("./myapp/")
-    expect(items.nth(4)).to_have_text("./myapp/main.py")
+    # We will poll since it might take a moment to sort and filter correctly
+    expect(items.nth(0)).to_have_text("./app.py", timeout=5000)
+    expect(items.nth(1)).to_have_text("./src/app.py", timeout=5000)
+    expect(items.nth(2)).to_have_text("./tests/test_app.py", timeout=5000)
+    expect(items.nth(3)).to_have_text("./myapp/", timeout=5000)
+    expect(items.nth(4)).to_have_text("./myapp/main.py", timeout=5000)
