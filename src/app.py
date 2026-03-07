@@ -38,11 +38,13 @@ try:
     from session_manager import Session, SessionManager
     from process_manager import validate_ssh_target, fetch_sessions_for_host, build_terminal_command, get_remote_command_prefix
     from share_manager import ShareManager
+    from utils import smart_file_search
 except ImportError:
     from src.auth_ldap import check_auth
     from src.session_manager import Session, SessionManager
     from src.process_manager import validate_ssh_target, fetch_sessions_for_host, build_terminal_command, get_remote_command_prefix
     from src.share_manager import ShareManager
+    from src.utils import smart_file_search
 
 # Global config holder and defaults
 config = {}
@@ -571,6 +573,10 @@ def pty_restart(data):
         session_obj = Session(tab_id, fd, child_pid, user_id, ssh_target=ssh_target, ssh_dir=ssh_dir, resume=resume)
         session_manager.add_session(session_obj)
         
+        _, _, ssh_dir_path = get_config_paths()
+        app_config = {"SSH_DIR": ssh_dir_path}
+        threading.Thread(target=session_manager.update_file_cache, args=(tab_id, app_config), daemon=True).start()
+
         def handle_steal(t_id, old_sid):
             logger.info(f"Stealing session {t_id} from SID {old_sid} for new SID {sid}")
             socketio.emit('session-stolen', {'tab_id': t_id}, room=old_sid)
@@ -627,6 +633,19 @@ def terminate_managed_session(tab_id):
         return jsonify({"status": "success"})
     
     return jsonify({"error": "Session not found"}), 404
+
+@app.route('/api/sessions/<session_id>/search_files', methods=['GET'])
+@authenticated_only
+def search_files(session_id):
+    q = request.args.get('q', '')
+    user_id = session.get('user_id') or ('admin' if env_config.BYPASS_AUTH_FOR_TESTING else None)
+    
+    session_obj = session_manager.get_session(session_id, user_id)
+    if not session_obj:
+        return jsonify({"error": "Session not found"}), 404
+        
+    matches = smart_file_search(session_obj.file_cache, q)
+    return jsonify({"matches": matches})
 
 @app.route('/api/sessions', methods=['GET'])
 @authenticated_only

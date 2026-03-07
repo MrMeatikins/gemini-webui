@@ -1,5 +1,6 @@
 import pytest
 import time
+import re
 from playwright.sync_api import sync_playwright, expect
 
 @pytest.fixture(scope="function")
@@ -46,7 +47,7 @@ def test_ui_settings_shared_sessions(page, server):
     page.locator('button:has-text("Settings")').click()
     expect(page.locator('#settings-modal')).to_be_visible(timeout=5000)
     
-    # 4. Verify Shared Sessions section exists and has the item
+    # 4. Verify Session Snapshots section exists and has the item
     shared_list = page.locator('#shared-sessions-list')
     expect(shared_list).to_be_visible(timeout=5000)
     
@@ -55,6 +56,24 @@ def test_ui_settings_shared_sessions(page, server):
     expect(session_item).to_be_visible(timeout=5000)
     expect(session_item).to_contain_text("Delete")
     expect(session_item).to_contain_text("Copy Link")
+    expect(session_item).to_contain_text("View")
+    
+    # Click View and ensure the preview modal opens
+    session_item.locator('button.primary', has_text="View").click()
+    preview_modal = page.locator('#preview-modal')
+    expect(preview_modal).to_be_visible(timeout=5000)
+    
+    # Check that iframe has src
+    iframe = page.locator('#preview-iframe')
+    expect(iframe).to_have_attribute('src', re.compile(r'/s/.+'))
+    
+    # Wait for the iframe content to load to ensure it's not a broken link
+    # (Optional, but good for stability)
+    time.sleep(1)
+    
+    # Close preview modal
+    preview_modal.locator('span').click()
+    expect(preview_modal).to_be_hidden(timeout=5000)
     
     # Accept the confirm dialog when deleting
     page.on("dialog", lambda dialog: dialog.accept())
@@ -67,6 +86,6 @@ def test_ui_settings_shared_sessions(page, server):
     time.sleep(1)
     
     # Verify the item is gone or empty state is shown
-    # (could be "No shared sessions." if it was the only one)
-    empty_text = shared_list.locator('div', has_text="No shared sessions.")
+    # (could be "No session snapshots." if it was the only one)
+    empty_text = shared_list.locator('div', has_text="No session snapshots.")
     expect(empty_text).to_be_visible(timeout=5000)

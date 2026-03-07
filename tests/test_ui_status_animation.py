@@ -44,14 +44,64 @@ def test_status_indicator_animation(page):
     # Ensure there is a flash class logic built-in, but initially it won't have flash unless it updates
     assert node.count() > 0
     
-    # Check CSS properties to ensure no clipping
-    margin_top = node.evaluate("el => window.getComputedStyle(el).marginTop")
-    margin_bottom = node.evaluate("el => window.getComputedStyle(el).marginBottom")
-    margin_left = node.evaluate("el => window.getComputedStyle(el).marginLeft")
+    # Check CSS properties to ensure no clipping (margin moved to parent wrapper for pulse animation)
+    margin_top = node.evaluate("el => window.getComputedStyle(el.parentElement).marginTop")
+    margin_bottom = node.evaluate("el => window.getComputedStyle(el.parentElement).marginBottom")
+    margin_left = node.evaluate("el => window.getComputedStyle(el.parentElement).marginLeft")
     
     assert int(margin_top.replace('px', '')) >= 4, "Spinner top margin is too small, will clip"
     assert int(margin_bottom.replace('px', '')) >= 4, "Spinner bottom margin is too small, will clip"
     assert int(margin_left.replace('px', '')) >= 4, "Spinner left margin is too small, will clip"
     
-    # To test orphaned, we can mark the session as orphaned on the server (by calling a disconnect logic if possible)
-    # But for a basic unit test verifying the DOM logic, this is sufficient.
+def test_status_animation_dom_persistence(page):
+    playwright_page, server_url, context = page
+    
+    # Load app and start a session
+    playwright_page.goto(server_url, timeout=15000)
+    playwright_page.wait_for_selector(".launcher", state="attached", timeout=15000)
+    
+    # Click to connect local host
+    local_connect_btn = playwright_page.locator('div[data-label="local"] button:has-text("Start New")').first
+    local_connect_btn.click()
+    
+    # Wait for terminal to appear
+    playwright_page.wait_for_selector(".terminal-instance", state="attached", timeout=15000)
+    
+    # Click New Tab button
+    new_tab_btn = playwright_page.locator('#new-tab-btn')
+    new_tab_btn.click()
+    
+    # Wait for launcher again
+    playwright_page.wait_for_selector(".launcher", state="attached", timeout=15000)
+    
+    # Wait for the backend session item to appear
+    session_item = playwright_page.locator('.backend-sessions-container .session-item').first
+    expect(session_item).to_be_attached(timeout=10000)
+    
+    html_before = session_item.evaluate("el => el.outerHTML")
+    print(f"HTML BEFORE: {html_before}")
+    
+    # Add a custom attribute to the DOM node to track if it gets replaced
+    session_item.evaluate('''el => el.setAttribute('data-test-marker', 'persisted')''')
+    
+    marker_before = session_item.evaluate("el => el.getAttribute('data-test-marker')")
+    print(f"MARKER BEFORE REFRESH: {marker_before}")
+    
+    # Trigger refresh manually rather than waiting 5 seconds
+    playwright_page.evaluate('''() => {
+        const activeTab = document.querySelector('.tab-content.active');
+        if (activeTab) {
+            const id = activeTab.id.replace('_instance', '');
+            refreshBackendSessionsList(id);
+        }
+    }''')
+    
+    # Wait a bit for the async fetch to complete
+    playwright_page.wait_for_timeout(2000)
+    
+    # Re-evaluate the custom attribute on the first item
+    html_after = playwright_page.locator('.backend-sessions-container .session-item').first.evaluate("el => el.outerHTML")
+    print(f"HTML AFTER: {html_after}")
+    
+    marker = playwright_page.locator('.backend-sessions-container .session-item').first.evaluate("el => el.getAttribute('data-test-marker')")
+    assert marker == 'persisted', "DOM node was replaced upon reload, resetting animation state!"

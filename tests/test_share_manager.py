@@ -11,7 +11,7 @@ def temp_share_manager(tmp_path):
     return manager
 
 def test_create_and_get_share(temp_share_manager):
-    html = "<html><body><h1>Shared Session</h1></body></html>"
+    html = "<html><body><h1>Session Snapshot</h1></body></html>"
     name = "My Session"
     
     share_id = temp_share_manager.create_share(html, name)

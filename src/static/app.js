@@ -376,24 +376,49 @@
                     listEl.innerHTML = '<div style="padding: 10px; color: #444; font-size: 11px;">No detached sessions found on the server.</div>';
                     return;
                 }
-                let html = '';
+                
+                const seenSessionIds = new Set();
+                if (listEl.innerHTML.includes('No detached sessions found on the server.')) {
+                    listEl.innerHTML = '';
+                }
+
                 sessions.forEach(s => {
+                    seenSessionIds.add(s.tab_id);
                     const statusClass = s.is_orphaned ? 'status-orphaned' : 'status-online';
                     const statusLabel = s.is_orphaned ? 'Orphaned' : 'Active';
 
                     let flashClass = '';
-                    let pulseHtml = '';
+                    let pulseHtml = '<div class="pulse-indicator superbright pulsing"></div>';
                     if (backendSessionLastSeen[s.tab_id] && backendSessionLastSeen[s.tab_id] !== s.last_active) {
                         flashClass = 'flash';
-                        pulseHtml = '<div class="pulse-indicator superbright pulsing"></div>';
                     }
                     backendSessionLastSeen[s.tab_id] = s.last_active;
 
                     const shortDir = s.ssh_dir ? s.ssh_dir.split('/').pop() : '';
                     const dirContext = shortDir ? `<span style="color: #0dbc79; font-weight: bold; margin-right: 5px;">[${shortDir}]</span>` : '';
                     const lastSeenDate = s.last_active ? new Date(s.last_active * 1000).toLocaleString() : 'Unknown';
-                    html += `
-                        <div id="managed-session-${s.tab_id}" class="session-item" style="background: #252526; margin-bottom: 8px; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #333;">
+
+                    const existingNode = document.getElementById(`managed-session-${id}-${s.tab_id}`);
+                    
+                    if (existingNode) {
+                        const statusNode = existingNode.querySelector('.status-node');
+                        if (statusNode) {
+                            statusNode.className = `status-node ${statusClass} ${flashClass}`;
+                        }
+                        const statusLabelNode = existingNode.querySelector('.status-label');
+                        if (statusLabelNode) {
+                            statusLabelNode.innerText = statusLabel;
+                        }
+                        const lastSeenNode = existingNode.querySelector('.session-last-seen-display');
+                        if (lastSeenNode) {
+                            lastSeenNode.innerText = `Last seen: ${lastSeenDate}`;
+                        }
+                    } else {
+                        const newNode = document.createElement('div');
+                        newNode.id = `managed-session-${id}-${s.tab_id}`;
+                        newNode.className = 'session-item';
+                        newNode.style.cssText = 'background: #252526; margin-bottom: 8px; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #333;';
+                        newNode.innerHTML = `
                             <div class="session-info">
                                 <div style="color: #3b8eea; font-weight: bold; font-size: 14px; margin-bottom: 2px;">${dirContext}${s.title}</div>
                                 <div style="color: #888; font-size: 11px; display: flex; align-items: center; gap: 8px;">
@@ -401,20 +426,30 @@
                                         <span style="position: relative; display: inline-block; width: 10px; height: 10px; margin: 4px 12px 4px 4px;">
                                             <span class="status-node ${statusClass} ${flashClass}" style="margin: 0; position: absolute; top: 0; left: 0;"></span>
                                             ${pulseHtml}
-                                        </span> ${statusLabel}
+                                        </span> <span class="status-label">${statusLabel}</span>
                                     </span> 
                                     <span style="color: #555;">|</span>
                                     <span class="session-id-display" style="font-family: monospace;">ID: ${s.tab_id}</span>
                                     <span style="color: #555;">|</span>
                                     <span class="session-last-seen-display">Last seen: ${lastSeenDate}</span>
                                 </div>
-                            </div>                            <div style="display: flex; gap: 8px;">
+                            </div>
+                            <div style="display: flex; gap: 8px;">
                                 <button class="small primary" style="padding: 6px 12px;" onclick="reclaimBackendSession('${id}', '${s.tab_id}', '${s.title}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Reclaim</button>
                                 <button class="small danger" style="padding: 6px 12px;" onclick="terminateBackendSession('${id}', '${s.tab_id}')">Terminate</button>
-                            </div>
-                        </div>`;
+                            </div>`;
+                        listEl.appendChild(newNode);
+                    }
                 });
-                listEl.innerHTML = html;
+
+                Array.from(listEl.children).forEach(child => {
+                    if (child.id && child.id.startsWith(`managed-session-${id}-`)) {
+                        const tabId = child.id.replace(`managed-session-${id}-`, '');
+                        if (!seenSessionIds.has(tabId)) {
+                            listEl.removeChild(child);
+                        }
+                    }
+                });
             }).catch(e => console.error("Session fetch failed", e));
         }
 
@@ -476,9 +511,11 @@
             if (launcherRefreshInterval) clearInterval(launcherRefreshInterval);
             launcherRefreshInterval = setInterval(() => {
                 refreshBackendSessionsList(id);
-                hosts.forEach(conn => {
+                hosts.forEach((conn, index) => {
                     const sessionListId = `${id}_sessions_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
-                    fetchSessions(id, conn, sessionListId, false, false);
+                    setTimeout(() => {
+                        fetchSessions(id, conn, sessionListId, false, false, true);
+                    }, index * 500);
                 });
             }, 10000);
 
@@ -487,7 +524,7 @@
             let placeholder = document.createElement('div');
             placeholder.className = 'drag-placeholder';
 
-            hosts.forEach(conn => {
+            hosts.forEach((conn, index) => {
                 const card = document.createElement('div');
                 card.className = 'connection-card';
                 card.dataset.label = conn.label;
@@ -629,7 +666,9 @@
                 });
 
                 connContainer.appendChild(card);
-                fetchSessions(id, conn, sessionListId, false, true); // Use cache first
+                setTimeout(() => {
+                    fetchSessions(id, conn, sessionListId, false, true); // Use cache first
+                }, index * 500);
             });
         }
 
@@ -706,6 +745,10 @@
             if (useCache) query.set('cache', 'true');
             query.set('bg', 'true'); // ALWAYS use background fetching to avoid blocking server
 
+            if (!useCache || isPolling) {
+                HostStateManager.triggerPulse(tabId, conn.label);
+            }
+
             try {
                 const response = await fetch('/api/sessions?' + query.toString());
                 if (!response.ok) throw new Error("HTTP error " + response.status);
@@ -721,8 +764,7 @@
                 }
 
                 if (!useCache || isPolling) {
-                    const shouldPulse = !useCache && !isPolling;
-                    HostStateManager.updateHealth(tabId, conn.label, !data.error, shouldPulse);
+                    HostStateManager.updateHealth(tabId, conn.label, !data.error, false);
                 }
 
                 const listEl = document.getElementById(targetId); if (!listEl) return;
@@ -764,8 +806,7 @@
                 if (useCache && !isPolling) fetchSessions(tabId, conn, targetId, forceAll, false); // Update after cache load
             } catch (e) {
                 if (!useCache || isPolling) {
-                    const shouldPulse = !useCache && !isPolling;
-                    HostStateManager.updateHealth(tabId, conn.label, false, shouldPulse);
+                    HostStateManager.updateHealth(tabId, conn.label, false, false);
                 }
                 console.error(e);
             }
@@ -780,6 +821,30 @@
         }
 
         function startSession(tabId, type, target, dir, resumeParam = true, sessionName = null, shouldReclaim = false) {
+            if (resumeParam === 'new') {
+                let maxId = 0;
+                document.querySelectorAll('.session-item').forEach(item => {
+                    const text = item.innerText || item.textContent;
+                    const match = text.match(/ID #(\d+)/);
+                    if (match && !isNaN(match[1])) {
+                        const id = parseInt(match[1]);
+                        if (id > maxId) maxId = id;
+                    }
+                });
+                
+                const localMax = parseInt(localStorage.getItem('geminiResume') || '0');
+                maxId = Math.max(maxId, localMax);
+                
+                resumeParam = (maxId + 1).toString();
+                localStorage.setItem('geminiResume', resumeParam);
+            } else if (resumeParam && resumeParam !== true && !isNaN(resumeParam)) {
+                const id = parseInt(resumeParam);
+                const localMax = parseInt(localStorage.getItem('geminiResume') || '0');
+                if (id > localMax) {
+                    localStorage.setItem('geminiResume', id.toString());
+                }
+            }
+
             const tab = tabs.find(t => t.id === tabId); if (!tab) return;
             tab.state = 'terminal'; 
             tab.session = { type, ssh_target: target, ssh_dir: dir, resume: resumeParam }; 
@@ -1303,17 +1368,21 @@
                     refreshBackendSessionsList(id);
                     
                     fetch('/api/hosts').then(r => r.json()).then(hosts => {
-                        hosts.forEach(conn => {
+                        hosts.forEach((conn, index) => {
                             const sessionListId = `${id}_sessions_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
-                            fetchSessions(id, conn, sessionListId, false, false);
+                            setTimeout(() => {
+                                fetchSessions(id, conn, sessionListId, false, false);
+                            }, index * 500);
                         });
 
                         if (launcherRefreshInterval) clearInterval(launcherRefreshInterval);
                         launcherRefreshInterval = setInterval(() => {
                             refreshBackendSessionsList(id);
-                            hosts.forEach(conn => {
+                            hosts.forEach((conn, index) => {
                                 const sessionListId = `${id}_sessions_${conn.label.replace(/[^a-z0-9]/gi, '')}`;
-                                fetchSessions(id, conn, sessionListId, false, false);
+                                setTimeout(() => {
+                                    fetchSessions(id, conn, sessionListId, false, false, true);
+                                }, index * 500);
                             });
                         }, 10000);
                     });
@@ -1530,14 +1599,17 @@
                 const settingsModal = document.getElementById('settings-modal');
                 const quickAddModal = document.getElementById('quick-add-key-modal');
                 const shareModal = document.getElementById('share-modal');
+                const previewModal = document.getElementById('preview-modal');
         
-                [settingsModal, quickAddModal, shareModal].forEach(modal => {
+                [settingsModal, quickAddModal, shareModal, previewModal].forEach(modal => {
+                    if (!modal) return;
                     modal.addEventListener('mousedown', (e) => { modalMouseDownTarget = e.target; });
                     modal.addEventListener('mouseup', (e) => {
                         if (modalMouseDownTarget === modal && e.target === modal) {
                             if (modal === settingsModal) closeSettings();
                             else if (modal === quickAddModal) closeQuickAddKey();
                             else if (modal === shareModal) closeShareModal();
+                            else if (modal === previewModal) closePreviewModal();
                         }
                         modalMouseDownTarget = null;
                     });
@@ -1549,7 +1621,7 @@
         async function loadSharedSessions() {
             const list = document.getElementById('shared-sessions-list');
             if (!list) return;
-            list.innerHTML = '<div style="padding: 10px; color: #888; font-size: 13px;">Loading shared sessions...</div>';
+            list.innerHTML = '<div style="padding: 10px; color: #888; font-size: 13px;">Loading session snapshots...</div>';
             try {
                 const response = await fetch('/api/shares');
                 if (response.ok) {
@@ -1558,7 +1630,7 @@
                     
                     list.innerHTML = '';
                     if (!shares || shares.length === 0) {
-                        list.innerHTML = '<div style="padding: 10px; color: #666; font-size: 13px;">No shared sessions.</div>';
+                        list.innerHTML = '<div style="padding: 10px; color: #666; font-size: 13px;">No session snapshots.</div>';
                         return;
                     }
                     
@@ -1577,7 +1649,7 @@
                         const dateStr = share.created_at ? new Date(share.created_at * 1000).toLocaleString() : 'Unknown';
                         const shareId = share.id || share.uuid; // handle both just in case
                         const linkUrl = window.location.origin + '/s/' + shareId;
-                        const sessionName = share.session_name || 'Shared Session';
+                        const sessionName = share.session_name || 'Session Snapshot';
                         
                         item.innerHTML = `
                             <div style="flex-grow: 1; overflow: hidden; margin-right: 15px;">
@@ -1585,21 +1657,24 @@
                                 <div style="font-size: 11px; color: #888; margin-bottom: 5px;">Created: ${dateStr}</div>
                                 <div style="font-size: 11px; color: #0dbc79; cursor: pointer; text-decoration: underline;" onclick="copyToClipboard('${linkUrl}')">Copy Link</div>
                             </div>
-                            <button class="danger small" onclick="deleteSharedSession('${shareId}')">Delete</button>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="primary small" onclick="viewSharedSession('${shareId}')">View</button>
+                                <button class="danger small" onclick="deleteSharedSession('${shareId}')">Delete</button>
+                            </div>
                         `;
                         list.appendChild(item);
                     });
                 } else {
-                    list.innerHTML = '<div style="padding: 10px; color: #cd3131; font-size: 13px;">Failed to load shared sessions.</div>';
+                    list.innerHTML = '<div style="padding: 10px; color: #cd3131; font-size: 13px;">Failed to load session snapshots.</div>';
                 }
             } catch (e) {
-                console.error("Failed to load shared sessions", e);
-                list.innerHTML = '<div style="padding: 10px; color: #cd3131; font-size: 13px;">Error loading shared sessions.</div>';
+                console.error("Failed to load session snapshots", e);
+                list.innerHTML = '<div style="padding: 10px; color: #cd3131; font-size: 13px;">Error loading session snapshots.</div>';
             }
         }
 
         async function deleteSharedSession(uuid) {
-            if (!confirm('Are you sure you want to delete this shared session?')) return;
+            if (!confirm('Are you sure you want to delete this session snapshot?')) return;
             try {
                 const response = await fetch('/api/shares/' + uuid, {
                     method: 'DELETE',
@@ -1614,10 +1689,31 @@
                     alert('Failed to delete: ' + (data.error || 'Unknown error'));
                 }
             } catch (e) {
-                console.error("Failed to delete shared session", e);
-                alert('Error deleting shared session.');
+                console.error("Failed to delete session snapshot", e);
+                alert('Error deleting session snapshot.');
             }
         }
+
+        function viewSharedSession(uuid) {
+            const previewModal = document.getElementById('preview-modal');
+            const iframe = document.getElementById('preview-iframe');
+            if (previewModal && iframe) {
+                iframe.src = '/s/' + uuid;
+                previewModal.style.display = 'block';
+            }
+        }
+
+        function closePreviewModal() {
+            const previewModal = document.getElementById('preview-modal');
+            const iframe = document.getElementById('preview-iframe');
+            if (previewModal) {
+                previewModal.style.display = 'none';
+            }
+            if (iframe) {
+                iframe.src = ''; // Clear iframe to stop loading
+            }
+        }
+
         async function loadPublicKey() {
             try {
                 const response = await fetch('/api/keys/public');
@@ -2005,9 +2101,30 @@
                 return;
             }
 
-            const htmlDump = serializeAddon.serializeAsHTML();
             const themeElement = document.getElementById('share-theme-select');
             const selectedTheme = themeElement ? themeElement.value : 'dark';
+
+            let htmlDump = serializeAddon.serializeAsHTML({
+                includeGlobalBackground: selectedTheme === 'color'
+            });
+
+            if (selectedTheme === 'light' || selectedTheme === 'dark') {
+                // Remove explicit color and background-color styles from the root elements 
+                // so that the CSS themes in share.html can apply properly.
+                // We do a light cleanup to ensure it inherits from the body theme wrapper.
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = htmlDump;
+                
+                // Usually xterm serialization wraps everything in a root div or pre.
+                // We'll strip global colors from the immediate children.
+                for (const child of tempDiv.children) {
+                    if (child.style) {
+                        child.style.backgroundColor = '';
+                        child.style.color = '';
+                    }
+                }
+                htmlDump = tempDiv.innerHTML;
+            }
 
             try {
                 const response = await fetch('/api/shares/create', {
@@ -2092,6 +2209,60 @@
                 alert('Upload error: ' + err.message);
             }
         }
+
+        const wsDownloadInput = document.getElementById('workspace-download-filename');
+        const autocompleteResults = document.getElementById('autocomplete-results');
+        let downloadDebounceTimer;
+
+        wsDownloadInput.addEventListener('input', () => {
+            clearTimeout(downloadDebounceTimer);
+            autocompleteResults.style.display = 'none';
+
+            downloadDebounceTimer = setTimeout(async () => {
+                const q = wsDownloadInput.value;
+                const tab = tabs.find(t => t.id === activeTabId);
+                
+                if (!tab || tab.session.type !== 'ssh' || !q) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/sessions/${tab.id}/search_files?q=${encodeURIComponent(q)}`);
+                    if (!response.ok) throw new Error('Failed to fetch autocomplete');
+                    const data = await response.json();
+                    
+                    autocompleteResults.innerHTML = '';
+                    if (data.matches && data.matches.length > 0) {
+                        data.matches.forEach(match => {
+                            const item = document.createElement('div');
+                            item.className = 'autocomplete-item';
+                            item.textContent = match;
+                            item.onclick = () => {
+                                if (match.endsWith('/')) {
+                                    wsDownloadInput.value = match;
+                                    wsDownloadInput.focus();
+                                    wsDownloadInput.dispatchEvent(new Event('input'));
+                                } else {
+                                    wsDownloadInput.value = match;
+                                    autocompleteResults.style.display = 'none';
+                                }
+                            };
+                            autocompleteResults.appendChild(item);
+                        });
+                        autocompleteResults.style.display = 'block';
+                    }
+                } catch (e) {
+                    console.error('Autocomplete search error:', e);
+                }
+            }, 300);
+        });
+
+        // Hide autocomplete on click outside
+        document.addEventListener('click', (e) => {
+            if (e.target !== wsDownloadInput && e.target !== autocompleteResults) {
+                autocompleteResults.style.display = 'none';
+            }
+        });
 
         function downloadWorkspaceFile() {
             const filenameInput = document.getElementById('workspace-download-filename');

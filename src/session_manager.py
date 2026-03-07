@@ -1,8 +1,12 @@
 import os
+import subprocess
+import shlex
 try:
     from config import env_config
+    from process_manager import build_ssh_args, get_remote_command_prefix
 except ImportError:
     from src.config import env_config
+    from src.process_manager import build_ssh_args, get_remote_command_prefix
 import signal
 import time
 import collections
@@ -25,6 +29,7 @@ class Session:
         self.max_buffer_len = 1024 * 256 # 256KB max scrollback
         self.last_seen = time.time()
         self.orphaned_at = None
+        self.file_cache = []
 
     def append_buffer(self, text):
         self.buffer.append(text)
@@ -41,7 +46,8 @@ class Session:
             "ssh_dir": self.ssh_dir,
             "resume": self.resume,
             "last_active": self.last_seen,
-            "is_orphaned": self.orphaned_at is not None
+            "is_orphaned": self.orphaned_at is not None,
+            "file_cache": self.file_cache
         }
 
 class SessionManager:
@@ -130,3 +136,32 @@ class SessionManager:
     def list_sessions(self, user_id):
         with self._lock:
             return [s.to_dict() for s in self.sessions.values() if s.user_id == user_id]
+
+    def update_file_cache(self, tab_id, app_config):
+        session = self.get_session(tab_id)
+        if not session:
+            return
+
+        find_cmd = 'find . -maxdepth 5 \\( -type d -printf "%p/\\n" -o -type f -print \\) | grep -v "/\\." | grep -v "node_modules" | grep -v "__pycache__"'
+
+        if session.ssh_target:
+            ssh_dir_path = app_config.get('SSH_DIR', '~/.ssh')
+            remote_prefix = get_remote_command_prefix(session.ssh_dir)
+            remote_cmd = f"{remote_prefix} {find_cmd}"
+            cmd = build_ssh_args(session.ssh_target, ssh_dir_path)
+            cmd.extend(['--', session.ssh_target, f"bash -c {shlex.quote(remote_cmd)}"])
+        else:
+            data_dir = env_config.DATA_DIR
+            work_dir = os.path.join(data_dir, "workspace")
+            if os.path.exists(work_dir):
+                cmd = ['/bin/sh', '-c', f"cd {shlex.quote(work_dir)} && {find_cmd}"]
+            else:
+                cmd = ['/bin/sh', '-c', find_cmd]
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                session.file_cache = result.stdout.strip().split('\n')
+        except Exception:
+            pass
+

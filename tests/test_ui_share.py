@@ -79,4 +79,13 @@ def test_ui_share_workflow(page, server):
     body_bg_color = new_page.evaluate('window.getComputedStyle(document.body).backgroundColor')
     assert body_bg_color == 'rgb(255, 255, 255)', f"Expected white background for light theme, got {body_bg_color}"
     
+    # Verify the inner terminal div does not override the background
+    inner_bg = new_page.evaluate('''() => {
+        const el = document.querySelector(".terminal-wrapper").firstElementChild;
+        return el ? window.getComputedStyle(el).backgroundColor : null;
+    }''')
+    
+    if inner_bg is not None:
+        assert inner_bg in ['rgba(0, 0, 0, 0)', 'rgb(255, 255, 255)', 'transparent'], f"Expected inner div to not have hardcoded black background, got {inner_bg}"
+    
     new_page.close()

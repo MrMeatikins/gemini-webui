@@ -386,3 +386,24 @@ def test_ui_add_and_use_host(page, server):
 
     print("Verifying host deleted")
     expect(page.locator("#hosts-list")).not_to_contain_text("Test SSH Host", timeout=5000)
+
+@pytest.mark.prone_to_timeout
+@pytest.mark.timeout(20)
+def test_ui_auto_resume_predicts_id(page, server):
+    """Verify that auto-resume predicts ID and stores it in localStorage."""
+    expect(page.get_by_text("Select a Connection").first).to_be_visible(timeout=5000)
+
+    # Click "Start New" on local (first card) in the ACTIVE tab
+    btns = page.locator('.tab-instance.active button:has-text("Start New")')
+    expect(btns.first).to_be_visible(timeout=5000)
+    btns.first.click()
+    
+    # Wait for terminal to appear
+    expect(page.locator('#active-connection-info')).to_be_visible(timeout=5000)
+    
+    # Now check localStorage
+    new_resume = page.evaluate("localStorage.getItem('geminiResume')")
+    assert new_resume is not None
+    assert new_resume.isdigit()
+    assert int(new_resume) > 0
+
