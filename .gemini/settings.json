@@ -6,6 +6,12 @@
         "Authorization": "Bearer ${KANBAN_API_KEY}",
         "X-Workspace-slug": "gemwebui"
       }
+    },
+    "joplin_memory": {
+      "url": "http://192.168.1.133:3000/http-api/mcp",
+      "headers": {
+        "Authorization": "Bearer 74eac216-5757-413a-ba6c-4599efd591b1"
+      }
     }
   },
   "general": {

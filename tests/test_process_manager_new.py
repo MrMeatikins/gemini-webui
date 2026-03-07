@@ -86,3 +86,46 @@ def test_pty_restart_ssh_cmd(mock_which, mock_exit, mock_execvp, mock_fork):
     assert 'gemini -r' in remote_cmd
     assert 'cd ~' in remote_cmd
     assert 'dev/project' in remote_cmd
+
+def test_build_terminal_command_resume_new():
+    from src.process_manager import build_terminal_command
+    # Test local
+    cmd = build_terminal_command(None, None, 'new', '/tmp/.ssh')
+    cmd_str = ' '.join(cmd)
+    assert 'gemini -r' not in cmd_str
+    assert 'gemini' in cmd_str
+
+    # Test SSH
+    cmd_ssh = build_terminal_command('user@host', '~/dir', 'new', '/tmp/.ssh')
+    remote_cmd = cmd_ssh[-1]
+    assert 'gemini -r' not in remote_cmd
+    assert 'gemini' in remote_cmd
+
+def test_build_terminal_command_resume_id():
+    from src.process_manager import build_terminal_command
+    # Test local
+    cmd = build_terminal_command(None, None, '123', '/tmp/.ssh')
+    cmd_str = ' '.join(cmd)
+    assert 'gemini -r 123' in cmd_str
+
+    # Test SSH
+    cmd_ssh = build_terminal_command('user@host', '~/dir', '123', '/tmp/.ssh')
+    remote_cmd = cmd_ssh[-1]
+    assert 'gemini -r 123' in remote_cmd
+
+def test_build_terminal_command_resume_true():
+    from src.process_manager import build_terminal_command
+    # Test local
+    cmd = build_terminal_command(None, None, True, '/tmp/.ssh')
+    cmd_str = ' '.join(cmd)
+    assert 'gemini -r' in cmd_str
+    assert 'gemini -r True' not in cmd_str
+    assert 'gemini -r true' not in cmd_str
+
+    # Test SSH
+    cmd_ssh = build_terminal_command('user@host', '~/dir', True, '/tmp/.ssh')
+    remote_cmd = cmd_ssh[-1]
+    assert 'gemini -r' in remote_cmd
+    assert 'gemini -r True' not in remote_cmd
+    assert 'gemini -r true' not in remote_cmd
+

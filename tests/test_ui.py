@@ -401,7 +401,8 @@ def test_ui_auto_resume_predicts_id(page, server):
     # Wait for terminal to appear
     expect(page.locator('#active-connection-info')).to_be_visible(timeout=5000)
     
-    # Now check localStorage
+    # Now check localStorage - poll since it's set async
+    page.wait_for_function("() => localStorage.getItem('geminiResume') !== null", timeout=10000)
     new_resume = page.evaluate("localStorage.getItem('geminiResume')")
     assert new_resume is not None
     assert new_resume.isdigit()

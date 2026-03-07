@@ -133,6 +133,7 @@ To preserve the main context window for high-level planning and architectural de
   1. **Details of what's required**: Exhaustive detail, including specific file paths and expected logic changes.
   2. **Test recommendations**: Precise testing strategies (e.g., specific pixel offsets to validate, boundary cases, or visual regression requirements).
   3. **Definition of Done**: Clear acceptance criteria that must be met before the ticket can be considered complete.
+  4. **Subtasks for Complex Topics**: If a topic is complex or can be split into multiple isolated tasks, it **MUST** be broken down into individual subtickets. Never bundle multiple disparate changes into a single monolithic ticket.
 - **CRITICAL: Explicit Content**: You must use the `description_html` property to format these details cleanly.
 - **CRITICAL PAUSE**: After creating or updating Kanban tickets, you MUST stop and wait for the user to review the tickets. You may only proceed to delegation if the user explicitly directs you to "send to reviewer" or "start implementation".
 - Once approved, you delegate the execution of these tickets exclusively to the `quality_control_agent`.

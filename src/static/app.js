@@ -821,23 +821,7 @@
         }
 
         function startSession(tabId, type, target, dir, resumeParam = true, sessionName = null, shouldReclaim = false) {
-            if (resumeParam === 'new') {
-                let maxId = 0;
-                document.querySelectorAll('.session-item').forEach(item => {
-                    const text = item.innerText || item.textContent;
-                    const match = text.match(/ID #(\d+)/);
-                    if (match && !isNaN(match[1])) {
-                        const id = parseInt(match[1]);
-                        if (id > maxId) maxId = id;
-                    }
-                });
-                
-                const localMax = parseInt(localStorage.getItem('geminiResume') || '0');
-                maxId = Math.max(maxId, localMax);
-                
-                resumeParam = (maxId + 1).toString();
-                localStorage.setItem('geminiResume', resumeParam);
-            } else if (resumeParam && resumeParam !== true && !isNaN(resumeParam)) {
+            if (resumeParam && resumeParam !== true && resumeParam !== 'new' && !isNaN(resumeParam)) {
                 const id = parseInt(resumeParam);
                 const localMax = parseInt(localStorage.getItem('geminiResume') || '0');
                 if (id > localMax) {
@@ -1176,6 +1160,33 @@
                     ssh_dir: dir 
                 });
                 tab.shouldReclaim = true; // All subsequent reconnects should attempt reclaim
+
+                if (tab.session.resume === 'new') {
+                    setTimeout(async () => {
+                        try {
+                            const query = new URLSearchParams();
+                            if (target) query.set('ssh_target', target);
+                            if (dir) query.set('ssh_dir', dir);
+                            query.set('cache', 'false');
+                            const res = await fetch(`/api/sessions?${query.toString()}`);
+                            const data = await res.json();
+                            const sessions = parseSessions(data.output || "");
+                            if (sessions.length > 0) {
+                                let maxId = 0;
+                                sessions.forEach(s => {
+                                    const id = parseInt(s.id);
+                                    if (id > maxId) maxId = id;
+                                });
+                                if (maxId > 0) {
+                                    tab.session.resume = maxId.toString();
+                                    saveTabsToStorage();
+                                    localStorage.setItem('geminiResume', maxId.toString());
+                                }
+                            }
+                        } catch (e) { console.error("Failed to update resume ID:", e); }
+                    }, 1500);
+                }
+
                 setTimeout(() => { fitTerminal(tab); tab.term.focus(); }, 150);
             });
 
