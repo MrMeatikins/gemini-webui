@@ -100,7 +100,9 @@
                 if (pulseEl) {
                     pulseEl.classList.remove('pulsing', 'superbright');
                     void pulseEl.offsetWidth; // trigger reflow
-                    pulseEl.classList.add('pulsing', 'superbright');
+                    requestAnimationFrame(() => {
+                        pulseEl.classList.add('pulsing', 'superbright');
+                    });
                 }
             },
 
@@ -109,11 +111,10 @@
                 const failures = this.updateState(label, isSuccess);
                 const newClass = this.getStatusClass(failures);
                 this.renderHealthUI(tabId, label, failures);
-                if (prevClass !== newClass) {
+                if (shouldPulse || prevClass !== newClass) {
                     this.triggerPulse(tabId, label);
                 }
-            },
-            
+            },            
             getInitialIndicator: function(label) {
                 if (!this.states[label]) return '⚪';
                 return this.getIndicator(this.states[label].failures);
@@ -920,18 +921,29 @@
 
                 let isSyncing = false;
                 const rowHeight = 16;
+                let lastScrollTop = 50000;
 
                 // Sync: Ghost -> Terminal (Passive & Momentum-Safe)
                 proxy.addEventListener('scroll', () => {
                     if (isSyncing) return;
-                    isSyncing = true;
-                    const deltaLines = Math.round((proxy.scrollTop - 50000) / rowHeight);
+                    
+                    const deltaScroll = proxy.scrollTop - lastScrollTop;
+                    const deltaLines = Math.round(deltaScroll / rowHeight);
+                    
                     if (deltaLines !== 0) {
                         tab.term.scrollLines(deltaLines);
-                        proxy.scrollTop = 50000; // Reset to center
+                        lastScrollTop += deltaLines * rowHeight;
                         selectionOverlay.style.top = proxy.scrollTop + 'px';
+                        
+                        // Recenter periodically to prevent hitting bounds
+                        if (Math.abs(proxy.scrollTop - 50000) > 40000) {
+                            isSyncing = true;
+                            proxy.scrollTop = 50000;
+                            lastScrollTop = 50000;
+                            selectionOverlay.style.top = proxy.scrollTop + 'px';
+                            setTimeout(() => { isSyncing = false; }, 10);
+                        }
                     }
-                    isSyncing = false;
                 }, {passive: true});
 
                                 // Tap-through logic: Only disable when a clear tap or long-press is detected
@@ -1509,8 +1521,12 @@
             });
         }
 
+        let resizeObserverTimeout;
         const resizeObserver = new ResizeObserver(() => {
-            tabs.forEach(tab => fitTerminal(tab));
+            clearTimeout(resizeObserverTimeout);
+            resizeObserverTimeout = setTimeout(() => {
+                tabs.forEach(tab => fitTerminal(tab));
+            }, 50);
         });
         resizeObserver.observe(document.getElementById('terminal-container'));
 
