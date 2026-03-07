@@ -16,8 +16,9 @@ def mobile_page(server):
 def test_scroll_debounce(mobile_page):
     mobile_page.wait_for_selector(".launcher, .terminal-instance", state="attached", timeout=15000)
     try:
-        if mobile_page.locator("text=Start New").is_visible(timeout=2000):
-            mobile_page.click("text=Start New")
+        # Wait longer for the button to appear, as API calls might take time on CI
+        mobile_page.wait_for_selector("text=Start New", timeout=10000)
+        mobile_page.click("text=Start New")
     except Exception:
         pass
     mobile_page.wait_for_selector(".mobile-scroll-proxy", timeout=10000)
@@ -65,8 +66,9 @@ def test_scroll_debounce(mobile_page):
 def test_resize_observer_debounce(mobile_page):
     mobile_page.wait_for_selector(".launcher, .terminal-instance", state="attached", timeout=15000)
     try:
-        if mobile_page.locator("text=Start New").is_visible(timeout=2000):
-            mobile_page.click("text=Start New")
+        # Wait longer for the button to appear, as API calls might take time on CI
+        mobile_page.wait_for_selector("text=Start New", timeout=10000)
+        mobile_page.click("text=Start New")
     except Exception:
         pass
     mobile_page.wait_for_selector(".mobile-scroll-proxy", timeout=10000)
