@@ -166,3 +166,7 @@ Once assigned, the execution proceeds as follows:
 5. **Timeboxing Testing**: When QA runs testing commands, particularly involving Playwright, they MUST timebox the commands (e.g., using `timeout 60s ...` or `--timeout` arguments) to ensure they do not hang indefinitely and consume all context. All test elements and commands must have explicit timeouts assigned.
 
 Stay efficient, stay secure. Good luck.
+
+## 8. Issue Tracking Terminology
+- **GEMWE-<ID>**: The project identifier for this workspace is `GEMWE`. Whenever an issue is referenced as `GEMWE-<ID>` (e.g., `GEMWE-150`), it directly maps to a Kanban issue where `project_identifier="GEMWE"` and `issue_identifier=<ID>`.
+- **Note**: The MCP server tool `retrieve_work_item_by_identifier` might encounter validation issues. As an alternative, when looking up an issue, search or list issues using the corresponding project ID and find the one with `sequence_id` matching `<ID>`.

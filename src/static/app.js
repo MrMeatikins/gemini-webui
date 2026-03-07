@@ -105,9 +105,11 @@
             },
 
             updateHealth: function(tabId, label, isSuccess, shouldPulse = true) {
+                const prevClass = this.getInitialStatusClass(label);
                 const failures = this.updateState(label, isSuccess);
+                const newClass = this.getStatusClass(failures);
                 this.renderHealthUI(tabId, label, failures);
-                if (shouldPulse) {
+                if (prevClass !== newClass) {
                     this.triggerPulse(tabId, label);
                 }
             },
@@ -366,6 +368,7 @@
         }
 
         let backendSessionLastSeen = {};
+        let backendSessionStatusClass = {};
 
         function refreshBackendSessionsList(id) {
             const listEl = document.getElementById(`${id}_backend_sessions`);
@@ -387,12 +390,19 @@
                     const statusClass = s.is_orphaned ? 'status-orphaned' : 'status-online';
                     const statusLabel = s.is_orphaned ? 'Orphaned' : 'Active';
 
-                    let flashClass = '';
-                    let pulseHtml = '<div class="pulse-indicator"></div>';
+                    let shouldPulse = false;
+                    const pulseId = `${id}_backend_pulse_${s.tab_id}`;
+                    let pulseHtml = `<div id="${pulseId}" class="pulse-indicator"></div>`;
+                    
                     if (backendSessionLastSeen[s.tab_id] && backendSessionLastSeen[s.tab_id] !== s.last_active) {
-                        flashClass = 'flash';
+                        shouldPulse = true;
                     }
+                    if (backendSessionStatusClass[s.tab_id] && backendSessionStatusClass[s.tab_id] !== statusClass) {
+                        shouldPulse = true;
+                    }
+                    
                     backendSessionLastSeen[s.tab_id] = s.last_active;
+                    backendSessionStatusClass[s.tab_id] = statusClass;
 
                     const shortDir = s.ssh_dir ? s.ssh_dir.split('/').pop() : '';
                     const dirContext = shortDir ? `<span style="color: #0dbc79; font-weight: bold; margin-right: 5px;">[${shortDir}]</span>` : '';
@@ -403,7 +413,7 @@
                     if (existingNode) {
                         const statusNode = existingNode.querySelector('.status-node');
                         if (statusNode) {
-                            statusNode.className = `status-node ${statusClass} ${flashClass}`;
+                            statusNode.className = `status-node ${statusClass}`;
                         }
                         const statusLabelNode = existingNode.querySelector('.status-label');
                         if (statusLabelNode) {
@@ -412,6 +422,14 @@
                         const lastSeenNode = existingNode.querySelector('.session-last-seen-display');
                         if (lastSeenNode) {
                             lastSeenNode.innerText = `Last seen: ${lastSeenDate}`;
+                        }
+                        if (shouldPulse) {
+                            const pulseEl = document.getElementById(pulseId);
+                            if (pulseEl) {
+                                pulseEl.classList.remove('pulsing', 'superbright');
+                                void pulseEl.offsetWidth; // trigger reflow
+                                pulseEl.classList.add('pulsing', 'superbright');
+                            }
                         }
                     } else {
                         const newNode = document.createElement('div');
@@ -424,7 +442,7 @@
                                 <div style="color: #888; font-size: 11px; display: flex; align-items: center; gap: 8px;">
                                     <span style="font-weight: bold; display: flex; align-items: center; gap: 4px;">
                                         <span style="position: relative; display: inline-block; width: 10px; height: 10px; margin: 4px 12px 4px 4px;">
-                                            <span class="status-node ${statusClass} ${flashClass}" style="margin: 0; position: absolute; top: 0; left: 0;"></span>
+                                            <span class="status-node ${statusClass}" style="margin: 0; position: absolute; top: 0; left: 0;"></span>
                                             ${pulseHtml}
                                         </span> <span class="status-label">${statusLabel}</span>
                                     </span> 
@@ -744,10 +762,6 @@
             if (conn.type === 'ssh') { query.set('ssh_target', conn.target); if (conn.dir) query.set('ssh_dir', conn.dir); }
             if (useCache) query.set('cache', 'true');
             query.set('bg', 'true'); // ALWAYS use background fetching to avoid blocking server
-
-            if (!useCache) {
-                HostStateManager.triggerPulse(tabId, conn.label);
-            }
 
             try {
                 const response = await fetch('/api/sessions?' + query.toString());

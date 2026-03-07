@@ -201,11 +201,6 @@ input[type="text"], textarea { width: 100%; background: #444; color: white; bord
     animation-duration: 5s;
     animation-timing-function: ease-in-out;
 }
-.flash { animation: flashWhite 0.6s ease-in-out !important; }
-@keyframes flashWhite {
-    0% { background-color: #fff; box-shadow: 0 0 15px #fff; }
-    100% { }
-}
 @keyframes spin {
     100% { transform: rotate(360deg); }
 }
