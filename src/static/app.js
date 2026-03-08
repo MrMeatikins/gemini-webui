@@ -1,20 +1,33 @@
 
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         const originalFetch = window.fetch;
-        window.fetch = function() {
+        window.fetch = async function() {
+            const currentCsrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             let [resource, config] = arguments;
             if (config === undefined) {
                 config = {};
             }
             if (config.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method.toUpperCase())) {
                 if (config.headers instanceof Headers) {
-                    if (csrfToken) config.headers.append('X-CSRFToken', csrfToken);
+                    if (currentCsrfToken) config.headers.append('X-CSRFToken', currentCsrfToken);
                 } else {
                     config.headers = config.headers || {};
-                    if (csrfToken) config.headers['X-CSRFToken'] = csrfToken;
+                    if (currentCsrfToken) config.headers['X-CSRFToken'] = currentCsrfToken;
                 }
             }
-            return originalFetch(resource, config);
+            const response = await originalFetch(resource, config);
+            if (response.status === 400 || response.status === 403) {
+                try {
+                    const clonedResponse = response.clone();
+                    const data = await clonedResponse.json();
+                    if (data && data.csrf_expired === true && !config.skipCsrfReload) {
+                        window.location.reload(true);
+                        return new Promise(() => {}); // Block further execution during reload
+                    }
+                } catch (e) {
+                    // Ignore JSON parse errors for non-JSON responses
+                }
+            }
+            return response;
         };
 
         // PWA Service Worker Registration
@@ -290,7 +303,13 @@
             brightCyan: '#29b8db', brightWhite: '#e5e5e5'
         };
 
+        // Initialize CSS variables immediately to reflect any saved theme
+        document.documentElement.style.setProperty('--terminal-bg', terminalTheme.background);
+        document.documentElement.style.setProperty('--terminal-fg', terminalTheme.foreground);
+
         function initThemeUI() {
+            document.documentElement.style.setProperty('--terminal-bg', terminalTheme.background);
+            document.documentElement.style.setProperty('--terminal-fg', terminalTheme.foreground);
             document.getElementById('theme-bg').value = terminalTheme.background;
             document.getElementById('theme-fg').value = terminalTheme.foreground;
             document.getElementById('theme-cursor').value = terminalTheme.cursor;
@@ -309,6 +328,10 @@
                 cursor: terminalTheme.cursor
             }));
             localStorage.setItem('gemini_font_size', currentFontSize);
+
+            // Set CSS variables for global styling matching the theme
+            document.documentElement.style.setProperty('--terminal-bg', terminalTheme.background);
+            document.documentElement.style.setProperty('--terminal-fg', terminalTheme.foreground);
 
             // Apply to all open terminals
             tabs.forEach(tab => {
@@ -395,9 +418,7 @@
                     const statusClass = s.is_orphaned ? 'status-orphaned' : 'status-online';
                     const statusLabel = s.is_orphaned ? 'Orphaned' : 'Active';
 
-                    let shouldPulse = true; // Always pulse on update for animated indicators (active->active, etc)
-                    const pulseId = `${id}_backend_pulse_${s.tab_id}`;
-                    let pulseHtml = `<div id="${pulseId}" class="pulse-indicator"></div>`;
+                    let shouldFlash = (backendSessionLastSeen[s.tab_id] !== s.last_active);
 
                     backendSessionLastSeen[s.tab_id] = s.last_active;
                     backendSessionStatusClass[s.tab_id] = statusClass;
@@ -412,6 +433,11 @@
                         const statusNode = existingNode.querySelector('.status-node');
                         if (statusNode) {
                             statusNode.className = `status-node ${statusClass}`;
+                            if (shouldFlash) {
+                                statusNode.classList.remove('flash');
+                                void statusNode.offsetWidth; // trigger reflow
+                                statusNode.classList.add('flash');
+                            }
                         }
                         const statusLabelNode = existingNode.querySelector('.status-label');
                         if (statusLabelNode) {
@@ -421,28 +447,20 @@
                         if (lastSeenNode) {
                             lastSeenNode.innerText = `Last seen: ${lastSeenDate}`;
                         }
-                        if (shouldPulse) {
-                            const pulseEl = document.getElementById(pulseId);
-                            if (pulseEl) {
-                                pulseEl.classList.remove('pulsing', 'superbright');
-                                void pulseEl.offsetWidth; // trigger reflow
-                                pulseEl.classList.add('pulsing', 'superbright');
-                            }
-                        }
                     } else {
                         const newNode = document.createElement('div');
                         newNode.id = `managed-session-${id}-${s.tab_id}`;
                         newNode.className = 'session-item';
                         newNode.style.cssText = 'background: #252526; margin-bottom: 8px; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #333;';
+                        
+                        let flashClass = shouldFlash ? ' flash' : '';
                         newNode.innerHTML = `
                             <div class="session-info">
                                 <div style="color: #3b8eea; font-weight: bold; font-size: 14px; margin-bottom: 2px;">${dirContext}${s.title}</div>
                                 <div style="color: #888; font-size: 11px; display: flex; align-items: center; gap: 8px;">
                                     <span style="font-weight: bold; display: flex; align-items: center; gap: 4px;">
-                                        <span style="position: relative; display: inline-block; width: 10px; height: 10px; margin: 4px 12px 4px 4px;">
-                                            <span class="status-node ${statusClass}" style="margin: 0; position: absolute; top: 0; left: 0;"></span>
-                                            ${pulseHtml}
-                                        </span> <span class="status-label">${statusLabel}</span>
+                                        <span class="status-node ${statusClass}${flashClass}"></span>
+                                        <span class="status-label">${statusLabel}</span>
                                     </span> 
                                     <span style="color: #555;">|</span>
                                     <span class="session-id-display" style="font-family: monospace;">ID: ${s.tab_id}</span>
@@ -1136,10 +1154,10 @@
                 textarea.setAttribute('type', 'text');
                 textarea.setAttribute('aria-autocomplete', 'none');
                 textarea.setAttribute('aria-controls', 'rolling-log-' + tabId);
-                textarea.setAttribute('autocomplete', 'off');
-                textarea.setAttribute('autocorrect', 'off');
-                textarea.setAttribute('autocapitalize', 'none');
-                textarea.setAttribute('spellcheck', 'false');
+                textarea.setAttribute('autocomplete', 'on');
+                textarea.setAttribute('autocorrect', 'on');
+                textarea.setAttribute('autocapitalize', 'sentences');
+                textarea.setAttribute('spellcheck', 'true');
                 textarea.style.backgroundColor = terminalTheme.background;
                 textarea.style.color = terminalTheme.foreground;
 
@@ -1152,10 +1170,15 @@
                     setTimeout(() => { if (textarea.value.length > 0) textarea.value = ''; }, 200);
                 });
 
-                // Clear the input buffer immediately after xterm.js has had a chance to process it
+                // Clear the input buffer on word boundaries after xterm.js has had a chance to process it
                 // ONLY if we are not in the middle of a composition (e.g., Speech-to-Text)
                 textarea.addEventListener('input', (e) => {
-                    if (!isComposing && e.inputType !== 'insertFromPaste') {
+                    if (!isComposing && e.inputType !== 'insertFromPaste' && e.inputType !== 'insertLineBreak') {
+                        const val = textarea.value;
+                        if (val.length > 0 && /[\s\n\r]/.test(val[val.length - 1])) {
+                            setTimeout(() => { if (textarea.value.length > 0) textarea.value = ''; }, 10);
+                        }
+                    } else if (e.inputType === 'insertLineBreak') {
                         setTimeout(() => { if (textarea.value.length > 0) textarea.value = ''; }, 10);
                     }
                 });
@@ -1179,7 +1202,7 @@
                             formData.append('file', file, file.name || `pasted-image-${Date.now()}.${ext}`);
                             
                             try {
-                                const response = await fetch('/api/upload', {
+                                const response = await fetchWithCSRF('/api/upload', {
                                     method: 'POST',
                                     headers: {
                                         'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
@@ -1205,6 +1228,7 @@
             }
 
             tab.socket = io.connect(window.location.origin, {
+                auth: { csrf_token: document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') },
                 reconnection: true,
                 reconnectionAttempts: Infinity,
                 reconnectionDelay: 1000,
@@ -1293,6 +1317,15 @@
                 tab.term.write('\r\n\x1b[1;32m[Reconnected! Total attempts: ' + attemptNumber + ']\x1b[0m\r\n');
             });
 
+            tab.socket.on('connect_error', (error) => {
+                if (error.message === 'invalid_csrf') {
+                    if (tab.term) {
+                        tab.term.write('\r\n\x1b[1;31m[CSRF Token Expired. Reloading page...]\x1b[0m\r\n');
+                    }
+                    setTimeout(() => window.location.reload(true), 1500);
+                }
+            });
+
             tab.socket.on('reconnect_error', (error) => {
                 // Keep retrying
             });
@@ -1304,7 +1337,15 @@
 
             tab.socket.on('pty-output', (data) => { 
                 if (tab.term) {
-                    tab.term.write(data.output);
+                    const buffer = tab.term.buffer.active;
+                    // If the user is at the bottom (or within 2 lines of it), we should ensure they stay at the bottom
+                    const isAtBottom = buffer.viewportY >= buffer.baseY - 2;
+                    tab.term.write(data.output, () => {
+                        // After writing, if they were at the bottom but xterm failed to keep them there, force it
+                        if (isAtBottom && buffer.viewportY < buffer.baseY) {
+                            tab.term.scrollToBottom();
+                        }
+                    });
                 }
             });
             tab.socket.on('session-stolen', (data) => {
@@ -1379,6 +1420,16 @@
                     if (tab.socket) emitPtyInput(tab, '\x1b\r');
                     return false;
                 }
+                
+                // Allow printable characters and backspace to pass through to the textarea overlay
+                // so they populate the autocorrect buffer instead of being swallowed by xterm's keydown handler.
+                if (e.type === 'keydown' && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+                    return false;
+                }
+                if (e.type === 'keydown' && e.key === 'Backspace') {
+                    return false;
+                }
+                
                 return true;
             });
             renderTabs(); switchTab(tabId);
@@ -1427,7 +1478,8 @@
         function emitPtyInput(tab, data) {
             if (!tab || !tab.socket || data == null) return;
             const chunkSize = 1024;
-            const strData = String(data);
+            // Convert \n to \r so that bash processes STT newlines and multiline pastes as command submissions
+            const strData = String(data).replace(/\n/g, '\r');
             for (let i = 0; i < strData.length; i += chunkSize) {
                 const chunk = strData.slice(i, i + chunkSize);
                 tab.socket.emit('pty-input', {input: chunk});
@@ -1963,9 +2015,48 @@
         }
 
         let envVarManager;
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/api/csrf');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.csrf_token) {
+                        const meta = document.querySelector('meta[name="csrf-token"]');
+                        if (meta) meta.setAttribute('content', data.csrf_token);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to initialize CSRF token:', e);
+            }
             envVarManager = new EnvVarManager();
         });
+
+        async function fetchWithCSRF(url, options = {}) {
+            options.headers = options.headers || {};
+            options.headers['X-CSRFToken'] = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            options.skipCsrfReload = true; // Prevent global fetch from reloading page on 400/403
+            
+            let response = await fetch(url, options);
+            
+            if (response.status === 400 || response.status === 403) {
+                try {
+                    const csrfResponse = await fetch('/api/csrf');
+                    if (csrfResponse.ok) {
+                        const data = await csrfResponse.json();
+                        if (data.csrf_token) {
+                            const meta = document.querySelector('meta[name="csrf-token"]');
+                            if (meta) meta.setAttribute('content', data.csrf_token);
+                            options.headers['X-CSRFToken'] = data.csrf_token;
+                            
+                            response = await fetch(url, options);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to refresh CSRF token on retry:', e);
+                }
+            }
+            return response;
+        }
 
         let editingHostLabel = null;
 
@@ -2087,7 +2178,7 @@
             formData.append('file', file);
             
             try {
-                const response = await fetch('/api/keys/upload', {
+                const response = await fetchWithCSRF('/api/keys/upload', {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
@@ -2139,6 +2230,12 @@
                 }
                 triggerHapticFeedback();
                 toggleFn();
+                
+                // Explicitly focus the terminal textarea to ensure the keyboard appears
+                const tab = tabs.find(t => t.id === activeTabId);
+                if (tab && tab.term && tab.term.textarea) {
+                    tab.term.textarea.focus();
+                }
             };
             btn.addEventListener('touchstart', handler, { passive: false });
             btn.addEventListener('mousedown', handler);
@@ -2343,7 +2440,7 @@
             }
             
             try {
-                const response = await fetch('/api/upload', {
+                const response = await fetchWithCSRF('/api/upload', {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
@@ -2527,7 +2624,7 @@
                     }
 
                     try {
-                        const response = await fetch('/api/upload', {
+                        const response = await fetchWithCSRF('/api/upload', {
                             method: 'POST',
                             headers: {
                                 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''

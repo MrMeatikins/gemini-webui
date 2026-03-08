@@ -1,0 +1,64 @@
+import pytest
+import time
+from playwright.sync_api import sync_playwright, expect
+
+@pytest.fixture(scope="function")
+def page(server):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        # Using a mobile-like viewport or standard
+        context = browser.new_context(viewport={'width': 800, 'height': 600})
+        page = context.new_page()
+        page.on("console", lambda msg: print(f"CONSOLE: {msg.text}"))
+        page.on("pageerror", lambda err: print(f"PAGE ERROR: {err}"))
+        page.goto(server, timeout=15000)
+        page.wait_for_selector(".launcher, .terminal-instance", state="attached", timeout=15000)
+        yield page
+        context.close()
+        browser.close()
+
+@pytest.mark.timeout(30)
+def test_stt_multiline_overflow(page):
+    errors = []
+    page.on("pageerror", lambda err: errors.append(err))
+    
+    expect(page.get_by_text("Select a Connection").first).to_be_visible(timeout=5000)
+
+    # Start a fresh local session
+    btns = page.locator('.tab-instance.active button:has-text("Start New")')
+    expect(btns.first).to_be_visible(timeout=5000)
+    btns.first.click()
+    
+    # Wait for terminal to appear
+    expect(page.locator('#active-connection-info')).to_be_visible(timeout=5000)
+    
+    # Wait for terminal to be ready
+    page.wait_for_selector(".xterm-helper-textarea", state="attached", timeout=10000)
+    
+    textarea = page.locator(".xterm-helper-textarea").first
+    
+    # Inject a massive block of text with newlines simulating STT composition
+    long_text = "Line 1\n" + "Line 2\n" * 50 + "Line 50"
+    
+    # Simulate Voice Typing (STT)
+    textarea.evaluate("(el) => { el.dispatchEvent(new CompositionEvent('compositionstart')); }")
+    textarea.evaluate(f"(el) => {{ el.value = `{long_text}`; el.dispatchEvent(new Event('input', {{ bubbles: true, inputType: 'insertCompositionText' }})); }}")
+    textarea.evaluate(f"(el) => {{ el.dispatchEvent(new CompositionEvent('compositionend', {{ data: `{long_text}` }})); }}")
+    
+    # Get bounding box of textarea
+    box = textarea.bounding_box()
+    viewport = page.viewport_size
+    
+    print(f"Textarea Bounding Box: {box}")
+    print(f"Viewport: {viewport}")
+    
+    assert box['width'] <= viewport['width'], f"Textarea exceeds viewport width: {box['width']} > {viewport['width']}"
+    assert box['height'] <= viewport['height'], f"Textarea exceeds viewport height: {box['height']} > {viewport['height']}"
+    
+    # Now try to submit (press enter)
+    page.keyboard.press("Enter")
+    
+    # Give it a bit to process
+    page.wait_for_timeout(1000)
+    
+    assert len(errors) == 0, f"Page threw errors: {errors}"

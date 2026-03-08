@@ -44,10 +44,10 @@ def test_status_indicator_animation(page):
     # Ensure there is a flash class logic built-in, but initially it won't have flash unless it updates
     assert node.count() > 0
     
-    # Check CSS properties to ensure no clipping (margin moved to parent wrapper for pulse animation)
-    margin_top = node.evaluate("el => window.getComputedStyle(el.parentElement).marginTop")
-    margin_bottom = node.evaluate("el => window.getComputedStyle(el.parentElement).marginBottom")
-    margin_left = node.evaluate("el => window.getComputedStyle(el.parentElement).marginLeft")
+    # Check CSS properties to ensure no clipping
+    margin_top = node.evaluate("el => window.getComputedStyle(el).marginTop")
+    margin_bottom = node.evaluate("el => window.getComputedStyle(el).marginBottom")
+    margin_left = node.evaluate("el => window.getComputedStyle(el).marginLeft")
     
     assert int(margin_top.replace('px', '')) >= 4, "Spinner top margin is too small, will clip"
     assert int(margin_bottom.replace('px', '')) >= 4, "Spinner bottom margin is too small, will clip"
@@ -105,3 +105,60 @@ def test_status_animation_dom_persistence(page):
     
     marker = playwright_page.locator('.backend-sessions-container .session-item').first.evaluate("el => el.getAttribute('data-test-marker')")
     assert marker == 'persisted', "DOM node was replaced upon reload, resetting animation state!"
+
+def test_status_flash_on_update(page):
+    playwright_page, server_url, context = page
+    
+    # Start app and create a session
+    playwright_page.goto(server_url, timeout=15000)
+    playwright_page.wait_for_selector(".launcher", state="attached", timeout=15000)
+    
+    local_connect_btn = playwright_page.locator('div[data-label="local"] button:has-text("Start New")').first
+    local_connect_btn.click()
+    playwright_page.wait_for_selector(".terminal-instance", state="attached", timeout=15000)
+    
+    new_tab_btn = playwright_page.locator('#new-tab-btn')
+    new_tab_btn.click()
+    playwright_page.wait_for_selector(".launcher", state="attached", timeout=15000)
+    
+    # Wait for the backend session item
+    session_item = playwright_page.locator('.backend-sessions-container .session-item').first
+    expect(session_item).to_be_attached(timeout=10000)
+    
+    node = session_item.locator('.status-node')
+    expect(node).to_be_attached()
+    
+    # We want to intercept the next fetch to /api/management/sessions
+    import json
+    
+    def handle_route(route):
+        print("ROUTE HIT!")
+        response = route.fetch()
+        data = response.json()
+        if data and len(data) > 0:
+            data[0]['last_active'] = data[0]['last_active'] + 100
+            route.fulfill(json=data)
+        else:
+            route.fulfill(response=response)
+            
+    playwright_page.route("**/api/management/sessions*", handle_route)
+    
+    # Trigger refresh
+    playwright_page.evaluate('''() => {
+        const activeTab = document.querySelector('.tab-instance.active');
+        if (activeTab) {
+            const id = activeTab.id.replace('_instance', '');
+            console.log("Triggering refresh for " + id);
+            refreshBackendSessionsList(id);
+        } else {
+            console.log("No active tab found");
+        }
+    }''')
+    
+    # Wait to ensure the route had time to trigger
+    playwright_page.wait_for_timeout(1000)
+    
+    # The node should get the 'flash' class momentarily
+    import re
+    expect(node).to_have_class(re.compile(r".*\bflash\b.*"), timeout=5000)
+

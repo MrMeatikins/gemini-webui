@@ -35,6 +35,10 @@ def run_fake_gemini():
             sys.stdout.flush()
         elif "EXIT" in line:
             break
+        elif "BURST" in line:
+            for i in range(200):
+                print(f"Line {i}: This is a long line of text that might even wrap if it gets long enough to wrap around the terminal width. Let's make it sufficiently long.")
+            sys.stdout.flush()
         else:
             print(f"You said: {line}")
             sys.stdout.flush()

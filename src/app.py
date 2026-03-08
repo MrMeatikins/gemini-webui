@@ -68,9 +68,7 @@ csrf = CSRFProtect(app)
 
 @app.errorhandler(CSRFError)
 def csrf_error(e):
-    if request.path.startswith('/api/'):
-        return jsonify({"error": "CSRF token missing or incorrect", "reason": e.description}), 400
-    return f"CSRF Error: {e.description}", 400
+    return jsonify({"error": "CSRF token missing or incorrect", "csrf_expired": True}), 400
 
 try:
     with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'VERSION'), 'r') as f:
@@ -310,9 +308,25 @@ def authenticated_only(f):
     return wrapped
 
 @socketio.on('connect')
-def handle_connect():
+def handle_connect(auth=None):
+    from flask_wtf.csrf import validate_csrf, ValidationError
+    auth = auth or {}
+    csrf_token = auth.get('csrf_token')
+    logger.info(f"Socket.io connect attempt with token: {csrf_token}")
+
+    try:
+        if app.config.get('WTF_CSRF_ENABLED', True):
+            validate_csrf(csrf_token)
+            logger.info("CSRF validation passed")
+        else:
+            logger.info("CSRF validation disabled via config")
+    except ValidationError as e:
+        logger.warning(f"CSRF validation failed: {e}")
+        raise ConnectionRefusedError('invalid_csrf')
+
     if env_config.BYPASS_AUTH_FOR_TESTING:
         return True
+
     if not session.get('authenticated'):
         return False
     return True
