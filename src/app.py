@@ -31,7 +31,7 @@ from flask import Flask, render_template, request, Response, session, jsonify, s
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO
 from flask_talisman import Talisman
-from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_wtf.csrf import CSRFProtect, CSRFError, generate_csrf
 from werkzeug.middleware.proxy_fix import ProxyFix
 try:
     from auth_ldap import check_auth
@@ -760,6 +760,10 @@ def update_config():
     _, config_file, _ = get_config_paths()
     with open(config_file, 'w') as f: json.dump(curr_conf, f, indent=4)
     return jsonify({"status": "success"})
+
+@app.route('/api/csrf', methods=['GET'])
+def get_csrf_token():
+    return jsonify({"csrf_token": generate_csrf()})
 
 @app.route('/api/upload', methods=['POST'])
 @authenticated_only

@@ -1149,14 +1149,57 @@
                 textarea.addEventListener('compositionend', () => {
                     isComposing = false;
                     // When composition ends, clear the buffer after a slight delay
-                    setTimeout(() => { if (textarea.value.length > 0) textarea.value = ''; }, 50);
+                    setTimeout(() => { if (textarea.value.length > 0) textarea.value = ''; }, 200);
                 });
 
                 // Clear the input buffer immediately after xterm.js has had a chance to process it
                 // ONLY if we are not in the middle of a composition (e.g., Speech-to-Text)
-                textarea.addEventListener('input', () => {
-                    if (!isComposing) {
+                textarea.addEventListener('input', (e) => {
+                    if (!isComposing && e.inputType !== 'insertFromPaste') {
                         setTimeout(() => { if (textarea.value.length > 0) textarea.value = ''; }, 10);
+                    }
+                });
+
+                // Handle image paste and text paste buffer clearing
+                textarea.addEventListener('paste', async (e) => {
+                    const items = (e.clipboardData || window.clipboardData)?.items;
+                    if (!items) return;
+                    let hasImage = false;
+                    for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        if (item.type.startsWith('image/')) {
+                            hasImage = true;
+                            e.preventDefault();
+                            const file = item.getAsFile();
+                            if (!file) continue;
+                            
+                            const formData = new FormData();
+                            // Generate a generic filename if missing
+                            const ext = item.type.split('/')[1] || 'png';
+                            formData.append('file', file, file.name || `pasted-image-${Date.now()}.${ext}`);
+                            
+                            try {
+                                const response = await fetch('/api/upload', {
+                                    method: 'POST',
+                                    headers: {
+                                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                                    },
+                                    body: formData
+                                });
+                                if (!response.ok) throw new Error('Upload failed: ' + response.statusText);
+                                const data = await response.json();
+                                sendToTerminal(`> I uploaded @${data.filename}\r`);
+                            } catch (error) {
+                                console.error('Paste upload error:', error);
+                                if (tab.term) {
+                                    tab.term.write(`\r\n\x1b[31m[Error] Failed to upload pasted image: ${error.message}\x1b[0m\r\n`);
+                                }
+                            }
+                        }
+                    }
+                    if (!hasImage && !isComposing) {
+                        // Normal text paste needs more time to process in xterm before clearing buffer
+                        setTimeout(() => { if (textarea && textarea.value.length > 0) textarea.value = ''; }, 100);
                     }
                 });
             }
@@ -1170,10 +1213,24 @@
             });
             
             let disconnectTime = null;
-            tab.socket.on('connect', () => {
+            tab.socket.on('connect', async () => {
                 disconnectTime = null;
                 tab.term.write('\r\n\x1b[2m[Connected to server]\x1b[0m\r\n');
                 updateStatus(tab.session.ssh_target, tab.session.ssh_dir); // Restore correct status
+
+                // Refresh CSRF token on reconnect in case server restarted
+                try {
+                    const response = await fetch('/api/csrf');
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.csrf_token) {
+                            const meta = document.querySelector('meta[name="csrf-token"]');
+                            if (meta) meta.setAttribute('content', data.csrf_token);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to refresh CSRF token:', e);
+                }
                 tab.socket.emit('restart', { 
                     tab_id: tabId, 
                     reclaim: tab.shouldReclaim,
