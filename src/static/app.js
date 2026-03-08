@@ -315,6 +315,10 @@
                 if (tab.term) {
                     tab.term.options.theme = terminalTheme;
                     tab.term.options.fontSize = currentFontSize;
+                    if (tab.term.textarea) {
+                        tab.term.textarea.style.backgroundColor = terminalTheme.background;
+                        tab.term.textarea.style.color = terminalTheme.foreground;
+                    }
                     fitTerminal(tab);
                 }
             });
@@ -1136,6 +1140,8 @@
                 textarea.setAttribute('autocorrect', 'off');
                 textarea.setAttribute('autocapitalize', 'none');
                 textarea.setAttribute('spellcheck', 'false');
+                textarea.style.backgroundColor = terminalTheme.background;
+                textarea.style.color = terminalTheme.foreground;
 
                 // TRACK COMPOSITION STATE (Speech-to-Text, swipe typing, etc.)
                 let isComposing = false;
@@ -2065,6 +2071,23 @@
                 e.preventDefault();
             }, { passive: false });
         }
+
+        // Setup sticky modifier buttons (Ctrl/Alt)
+        const setupModifierBtn = (id, toggleFn) => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            const handler = (e) => {
+                if (e.type === 'touchstart') {
+                    e.preventDefault(); // prevent mouse emulation and double click
+                }
+                triggerHapticFeedback();
+                toggleFn();
+            };
+            btn.addEventListener('touchstart', handler, { passive: false });
+            btn.addEventListener('mousedown', handler);
+        };
+        setupModifierBtn('ctrl-toggle', toggleCtrl);
+        setupModifierBtn('alt-toggle', toggleAlt);
 
         // Setup Hold-to-Repeat for mobile buttons
         document.querySelectorAll('.control-btn.holdable').forEach(btn => {
