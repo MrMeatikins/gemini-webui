@@ -1173,7 +1173,10 @@
                 // Clear the input buffer on word boundaries after xterm.js has had a chance to process it
                 // ONLY if we are not in the middle of a composition (e.g., Speech-to-Text)
                 textarea.addEventListener('input', (e) => {
-                    if (!isComposing && e.inputType !== 'insertFromPaste' && e.inputType !== 'insertLineBreak') {
+                    if (e.inputType === 'deleteContentBackward') {
+                        if (tab.socket) emitPtyInput(tab, '\x7f');
+                    }
+                    if (!isComposing && e.inputType !== 'insertFromPaste' && e.inputType !== 'insertLineBreak' && e.inputType !== 'deleteContentBackward') {
                         const val = textarea.value;
                         if (val.length > 0 && /[\s\n\r]/.test(val[val.length - 1])) {
                             setTimeout(() => { if (textarea.value.length > 0) textarea.value = ''; }, 10);

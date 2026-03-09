@@ -1,0 +1,62 @@
+import pytest
+from playwright.sync_api import expect, sync_playwright
+import time
+import os
+
+@pytest.fixture(scope="function")
+def mobile_page(server):
+    with sync_playwright() as p:
+        iphone_12 = p.devices['iPhone 12']
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(**iphone_12)
+        page = context.new_page()
+        page.goto(server, timeout=15000)
+        page.wait_for_selector(".launcher, .terminal-instance", state="attached", timeout=15000)
+        
+        yield page
+        
+        context.close()
+        browser.close()
+
+@pytest.mark.timeout(30)
+def test_mobile_backspace_removes_characters(mobile_page):
+    print("Test started")
+    # Start a fresh session
+    btns = mobile_page.locator('.tab-instance.active button:has-text("Start New")')
+    expect(btns.first).to_be_visible(timeout=5000)
+    btns.first.click()
+
+    print("Clicked start new")
+    expect(mobile_page.locator('.xterm-screen')).to_be_visible(timeout=5000)
+    time.sleep(1) # wait for term render
+    print("Term rendered")
+    
+    # Get active tab ID and find textarea
+    active_tab_id = mobile_page.evaluate("sessionStorage.getItem('gemini_active_tab')")
+    textarea = mobile_page.locator(f"#terminal-input-{active_tab_id}")
+    textarea.focus()
+
+    print("Focusing textarea")
+    # Type "hello"
+    mobile_page.keyboard.type("hello")
+    time.sleep(1)
+    
+    print("Typed hello, dispatching backspace")
+    textarea.evaluate("el => { el.value = 'hell'; el.dispatchEvent(new InputEvent('input', {inputType: 'deleteContentBackward'})); }")
+    time.sleep(1)
+    
+    print("Taking screenshot")
+    os.makedirs("public/qa-screenshots", exist_ok=True)
+    screenshot_path = "public/qa-screenshots/test_mobile_backspace.png"
+    mobile_page.screenshot(path=screenshot_path)
+    
+    print("Pressing enter")
+    textarea.focus()
+    mobile_page.keyboard.type("\n")
+    time.sleep(1)
+    
+    print("Checking expect")
+    # Verify the terminal has output
+    expect(mobile_page.locator('.xterm-screen')).to_be_visible(timeout=5000)
+    print("Test done")
+
