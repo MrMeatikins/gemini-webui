@@ -1,5 +1,6 @@
 import pytest
 import time
+import warnings
 from playwright.sync_api import sync_playwright, expect
 
 @pytest.fixture(scope="module")
@@ -62,3 +63,6 @@ def test_modifier_keyboard_focus(mobile_page):
     }}''')
     
     assert is_textarea_focused_alt is True, "The terminal hidden textarea was not immediately focused upon tapping Alt."
+
+    mobile_page.screenshot(path="/tmp/gemwe-182.png")
+    warnings.warn("EVIDENCE: The hidden textarea is focused/on-screen keyboard is triggered. Screenshot saved to /tmp/gemwe-182.png")
