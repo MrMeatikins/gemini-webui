@@ -26,6 +26,10 @@ def test_full_color_logo(page, server):
     expect(page.locator('.xterm-screen')).to_be_visible(timeout=5000)
     time.sleep(2) # wait for term render and logo printing
     
+    # Trigger TRUECOLOR output
+    page.keyboard.type("TRUECOLOR\n")
+    time.sleep(2) # wait for truecolor render
+    
     # Share session
     page.locator('#share-session-btn').click()
     expect(page.locator('#share-modal')).to_be_visible(timeout=5000)
@@ -47,7 +51,7 @@ def test_full_color_logo(page, server):
     expect(new_page.locator('.terminal-wrapper')).to_be_visible(timeout=5000)
     time.sleep(1)
     
-    screenshot_path = "public/qa-screenshots/test_share_full_logo.png"
+    screenshot_path = "public/qa-screenshots/test_share_full_color_logo.png"
     import os
     os.makedirs("public/qa-screenshots", exist_ok=True)
     new_page.screenshot(path=screenshot_path)
@@ -66,10 +70,14 @@ def test_full_color_logo(page, server):
             import re
             m = re.search(r"color:\s*([^;]+)", style)
             if m:
-                colors_found.add(m.group(1).strip())
+                color_val = m.group(1).strip()
+                colors_found.add(color_val)
+                # Assert that the color is a valid hex code if it comes from TRUECOLOR (rgb conversion)
+                if color_val.startswith('#'):
+                    assert len(color_val) in (4, 7), f"Invalid hex color: {color_val}"
                 
     print(f"Colors found: {colors_found}")
-    # The logo uses at least 3 distinct colors usually
-    assert len(colors_found) >= 2, f"Expected multiple colors for the logo, found: {colors_found}"
+    # The logo uses at least 3 distinct colors usually, plus our TRUECOLOR #ff5733, #33ff57, #5733ff, etc.
+    assert any(c.startswith('#') for c in colors_found), "No hex codes (with # symbol) found in the serialized HTML output."
     
     new_page.close()

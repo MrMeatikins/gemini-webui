@@ -39,6 +39,11 @@ def run_fake_gemini():
             for i in range(200):
                 print(f"Line {i}: This is a long line of text that might even wrap if it gets long enough to wrap around the terminal width. Let's make it sufficiently long.")
             sys.stdout.flush()
+        elif "TRUECOLOR" in line:
+            print("\033[38;2;255;87;51mThis is custom red text\033[0m")
+            print("\033[48;2;51;255;87mThis has a custom green background\033[0m")
+            print("\033[38;2;87;51;255m\033[48;2;255;255;0mCustom purple text on custom yellow background\033[0m")
+            sys.stdout.flush()
         else:
             print(f"You said: {line}")
             sys.stdout.flush()
