@@ -85,7 +85,7 @@ def audit():
         print("\n--- AUDIT FAILED ---")
         print("The following tickets are marked as DONE but are missing the required Git commit URL in their comments:")
         for seq_id, name, issue_id in sorted(violating_issues, key=lambda x: x[0]):
-            print(f"GEMWE-{seq_id}: {name} (ID: {issue_id})")
+            print(f"GEMWEBUI-{seq_id}: {name} (ID: {issue_id})")
         print("\nRECOMMENDATION: These tickets should be moved back to 'In Progress' or have the commit URL added.")
         sys.exit(1)
     else:

@@ -17,7 +17,7 @@ When asked to audit tickets, follow these steps:
 
 2. **Analyze the Results**:
    * If the script reports `--- AUDIT PASSED ---`, inform the user that all completed tickets meet the compliance standards.
-   * If the script reports `--- AUDIT FAILED ---`, it will list the specific `GEMWE-<ID>` tickets that are violating the policy.
+   * If the script reports `--- AUDIT FAILED ---`, it will list the specific `GEMWEBUI-<ID>` tickets that are violating the policy.
 
 3. **Take Corrective Action**:
    For any ticket that fails the audit, you MUST recommend one of two paths to the user:

@@ -53,7 +53,7 @@ The project uses a custom Jenkins pipeline defined in the `Jenkinsfile`:
 - **Credential Injection**: Securely handles Google API keys, LDAP bind credentials, and SSH private keys.
 
 ### Deployment & Context Recovery
-**Automatic Deployment Check**: When you execute `git push`, an automated Gemini CLI hook will intercept your command and append the deployment check script (`./jenkins/wait-for-receipt.sh`). You do not need to do this manually.
+**Automatic Deployment Check**: When you execute `git push`, the system will automatically track the deployment progress and verify its success. You do not need to check the build status manually.
 
 > [!CAUTION]
 > **DEPLOYMENT VISIBILITY WARNING**: Because a `git push` triggers a zero-downtime deployment that restarts the server, **you will lose the response context of the `git push` command itself**.
@@ -169,19 +169,17 @@ Once a ticket enters **In Progress**, it enters the automated execution pipeline
 
 1. **Implementation (`In Progress`)**: The ticket is assigned to an engineering sub-agent or handled by the Primary Agent.
 2. **The Commit Gate**: When the engineer finishes, the Primary Agent reviews and attempts a `git commit`. 
-3. **The "Evil" QA Team**: The `pre-commit` hook automatically fires, piping the diff and test results to the `reality-checker`.
+3. **The "Evil" QA Team**: The system will automatically intercept the commit and evaluate the diff and test results.
     * **If Denied**: The default policy is "NEEDS WORK". The commit fails. The Primary Agent takes the rejection output and feeds it back to the engineering agent to fix.
     * **If Approved**: The commit succeeds.
-4. **Closure**: Only upon a successful commit is the Primary Agent allowed to move the ticket to **Done**. The Primary Agent MUST leave a final comment on the Kanban ticket detailing the work and explicitly citing the generated commit URL (e.g., `https://git.adamoutler.com/aoutler/gemini-webui/commit/<hash>`). You are forbidden from closing tickets without approval from the QA team triggered by the commit. 
+4. **Closure**: Only upon a successful commit is the Primary Agent allowed to move the ticket to **Done**. The Primary Agent MUST leave a final comment on the Kanban ticket detailing the work and explicitly citing the generated commit URL (e.g., `https://git.adamoutler.com/aoutler/gemini-webui/commit/<hash>`). You are forbidden from closing tickets without approval from the QA team triggered by the commit.
 
 ## 8. Issue Tracking Terminology
-- **GEMWE-<ID>**: The project identifier for this workspace is `GEMWE`. If the user says `GEMWE-<ID>` (e.g., `GEMWE-183`), that's this project (`GEMWE`), Sequence ID `<ID>` (e.g., 183).
-- **Note**: The MCP server tool `retrieve_work_item_by_identifier` might encounter validation issues. As an alternative, when looking up an issue, `list_projects` to get the UUID for "GEMWE", then `list_work_items` for that project and find the one with `sequence_id` matching your Sequence ID.
+- **GEMWEBUI-<ID>**: The project identifier for this workspace is `GEMWEBUI`. If the user says `GEMWEBUI-<ID>` (e.g., `GEMWEBUI-183`), that's this project (`GEMWEBUI`), Sequence ID `<ID>` (e.g., 183).
+- **Note**: The MCP server tool `retrieve_work_item_by_identifier` might encounter validation issues. As an alternative, when looking up an issue, `list_projects` to get the UUID for "GEMWEBUI", then `list_work_items` for that project and find the one with `sequence_id` matching your Sequence ID.
 
 ## 9. Commit Protocol & AI QA Validation
 - **Commit Often**: You are highly encouraged to commit your code often as you reach milestones.
-- **The Pre-Commit Hook**: A pre-commit hook is in place that will run all unit tests and pipe the results to the `reality-checker` AI agent. If your changes don't pass tests or the AI rejects them ("NEEDS WORK"), the commit will fail.
-- **Empirical Evidence Required**: Tests must output empirical evidence (screenshots, test results, logs). These MUST be saved to `/tmp` and NOT tracked in the repository itself. They must clearly show the job is done, otherwise the `reality-checker` will fail the commit checks.
-- **Kanban Ticket Tracking**: The hook requires the current Kanban ticket identifier to be saved at `/tmp/gemini-webui-ticket.txt`.
-- **Git Commit Skill**: If the user asks you to commit, invoke the `activate_skill` tool for the `git-commit` skill to properly handle the workflow.
-
+- **Automated Validation**: The environment strictly enforces quality. When you attempt to commit, the system will automatically run unit tests and perform AI-driven QA. If your changes don't pass tests or the QA rejects them, the commit will fail and you will be provided with the rejection reason.
+- **Empirical Evidence Required**: Tests must output empirical evidence (screenshots, test results, logs). These MUST be saved to `/tmp` and NOT tracked in the repository itself. They must clearly show the job is done, otherwise the QA will fail the commit.
+- **Kanban Ticket Tracking**: The system requires the current Kanban ticket identifier to be saved at `/tmp/gemini-webui-ticket.txt` before committing.
