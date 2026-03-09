@@ -6,7 +6,7 @@ input=$(cat)
 # Extract tool name
 tool_name=$(echo "$input" | jq -r '.tool_name')
 
-if [ "$tool_name" = "run_shell_command" ]; then
+if [[ "$tool_name" == *"run_shell_command"* ]]; then
     command=$(echo "$input" | jq -r '.tool_input.command')
     
     # Check if command is exactly "git push" or starts with "git push "

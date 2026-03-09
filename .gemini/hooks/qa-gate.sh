@@ -2,7 +2,7 @@
 input=$(cat)
 tool_name=$(echo "$input" | jq -r '.tool_name')
 
-if [ "$tool_name" = "run_shell_command" ]; then
+if [[ "$tool_name" == *"run_shell_command"* ]]; then
     command=$(echo "$input" | jq -r '.tool_input.command')
     
     # Intercept AI git commit commands unless explicitly bypassed
