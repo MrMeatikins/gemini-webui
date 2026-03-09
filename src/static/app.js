@@ -2380,6 +2380,11 @@
                         child.style.color = '';
                     }
                 }
+                const preDiv = tempDiv.querySelector('pre > div');
+                if (preDiv && preDiv.style) {
+                    preDiv.style.backgroundColor = '';
+                    preDiv.style.color = '';
+                }
             }
             htmlDump = tempDiv.innerHTML;
 

@@ -1,10 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shared Terminal Session: {{ session_name }}</title>
-<style>
+import re
+
+with open('src/templates/share.html', 'r') as f:
+    html = f.read()
+
+replacement_css = """
   :root {
     --bg-color: #1e1e1e; /* Dark (default) */
     --text-color: #cccccc;
@@ -40,19 +39,10 @@
     box-sizing: border-box;
     overflow-x: auto;
   }
+"""
 
-  .terminal-wrapper pre, .terminal-wrapper div {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: inherit;
-    line-height: 1.2;
-  }
-</style>
-</head>
-<body class="theme-{{ theme }}">
-<div class="terminal-wrapper">
-{{ html_content | safe }}
-</div>
-</body>
-</html>
+html = re.sub(r':root \{.*?\.terminal-wrapper \{.*?\}', replacement_css.strip() + "\n", html, flags=re.DOTALL)
+html = re.sub(r'\.terminal-wrapper pre, \.terminal-wrapper div \{', '.terminal-wrapper pre, .terminal-wrapper div {\n    margin: 0;\n    padding: 0;\n    box-sizing: border-box;\n    font-family: inherit;\n    line-height: 1.2;\n}', html)
+
+with open('src/templates/share.html', 'w') as f:
+    f.write(html)

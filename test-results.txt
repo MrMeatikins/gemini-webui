@@ -3,65 +3,34 @@ platform linux -- Python 3.12.3, pytest-8.0.2, pluggy-1.6.0
 rootdir: /home/adamoutler/gemini-webui
 configfile: pytest.ini
 plugins: playwright-0.4.4, anyio-4.12.1, timeout-2.4.0, base-url-2.1.0, cov-7.0.0
-collected 209 items
+collected 1 item
 
-tests/test_api.py .....                                                  [  2%]
-tests/test_api_env_vars.py .......                                       [  5%]
-tests/test_api_search.py ...                                             [  7%]
-tests/test_async.py ....                                                 [  9%]
-tests/test_auth_ldap.py ......                                           [ 11%]
-tests/test_cli_detection.py ..                                           [ 12%]
-tests/test_controls.py .....                                             [ 15%]
-tests/test_csrf_upload_api.py .                                          [ 15%]
-tests/test_css_extraction_new.py .                                       [ 16%]
-tests/test_ctrl_enter.py .                                               [ 16%]
-tests/test_e2e_bulk_upload.py .                                          [ 17%]
-tests/test_e2e_smart_search.py .                                         [ 17%]
-tests/test_e2e_ssh_upload.py .                                           [ 18%]
-tests/test_esc_dismiss.py ...                                            [ 19%]
-tests/test_fake_gemini.py ..                                             [ 20%]
-tests/test_file_cache.py ....                                            [ 22%]
-tests/test_health_indicators.py ...                                      [ 23%]
-tests/test_io.py ...                                                     [ 25%]
-tests/test_js_render_launcher.py .                                       [ 25%]
-tests/test_logic.py ...                                                  [ 27%]
-tests/test_manifest.py .                                                 [ 27%]
-tests/test_mobile_text_selection.py ....                                 [ 29%]
-tests/test_mobile_ui.py ..........                                       [ 34%]
-tests/test_pinch.py .                                                    [ 34%]
-tests/test_process_manager_injection.py ........                         [ 38%]
-tests/test_process_manager_new.py .....                                  [ 41%]
-tests/test_pty_overflow.py .                                             [ 41%]
-tests/test_pty_write.py .                                                [ 42%]
-tests/test_remote.py ...                                                 [ 43%]
-tests/test_security.py ..                                                [ 44%]
-tests/test_security_ansi.py ................                             [ 52%]
-tests/test_security_bola.py ...                                          [ 53%]
-tests/test_security_csrf.py ...                                          [ 55%]
-tests/test_security_payloads.py ........                                 [ 58%]
-tests/test_security_pty_eviction.py ..                                   [ 59%]
-tests/test_server_reconnect.py .                                         [ 60%]
-tests/test_session_management.py ......                                  [ 63%]
-tests/test_session_manager_concurrency.py ..                             [ 64%]
-tests/test_session_manager_new.py ......                                 [ 66%]
-tests/test_session_results_cache_race.py .                               [ 67%]
-tests/test_share_manager.py .....                                        [ 69%]
-tests/test_share_routes.py .....                                         [ 72%]
-tests/test_socket.py ....                                                [ 74%]
-tests/test_storage.py ...                                                [ 75%]
-tests/test_subdirs.py ..                                                 [ 76%]
-tests/test_theory.py .                                                   [ 77%]
-tests/test_ui.py ...........                                             [ 82%]
-tests/test_ui_autocomplete.py .                                          [ 82%]
-tests/test_ui_env_vars.py .                                              [ 83%]
-tests/test_ui_routes.py ......                                           [ 86%]
-tests/test_ui_settings_shares.py .                                       [ 86%]
-tests/test_ui_share.py .                                                 [ 87%]
-tests/test_ui_status_animation.py .                                      [ 87%]
-tests/test_ui_upload.py ....                                             [ 89%]
-tests/test_upload_download.py ........                                   [ 93%]
-tests/test_utils.py ............                                         [ 99%]
-tests/test_versioning.py .                                               [ 99%]
-tests/test_wake_lock.py .                                                [100%]
+tests/test_ui_share_color_average.py Generating public/private ed25519 key pair.
+Your identification has been saved in /tmp/pytest-of-adamoutler/pytest-1124/data0/.ssh/id_ed25519
+Your public key has been saved in /tmp/pytest-of-adamoutler/pytest-1124/data0/.ssh/id_ed25519.pub
+The key fingerprint is:
+SHA256:AlyZHM6wh/2VB/lj3In6t2w68HwruqormC5z/K4pi1U gemini-webui-inferrence1-20260308
+The key's randomart image is:
++--[ED25519 256]--+
+|    ..o+  ..     |
+|   . O+   .o     |
+|    = =   oo.o . |
+|     o . . .* o  |
+|    E . S  o .   |
+|   .   .  o      |
+| ..o       =     |
+|=.=..       *.+  |
+|oB++o.oo..oo.B+o |
++----[SHA256]-----+
+\nComputed body background for theme light: rgb(255, 255, 255)
+\nSaved screenshot for light mode to public/qa-screenshots/test_share_light.png
+\nLight mode average color: (255, 255, 255), luminance: 255.0
+\nComputed body background for theme dark: rgb(30, 30, 30)
+\nSaved screenshot for dark mode to public/qa-screenshots/test_share_dark.png
+Dark mode average color: (30, 30, 30), luminance: 30.0
+\nComputed body background for theme full: rgb(30, 30, 30)
+\nSaved screenshot for full mode to public/qa-screenshots/test_share_full.png
+Full mode average color: (30, 30, 30), luminance: 30.0
+.
 
-======================= 209 passed in 139.12s (0:02:19) ========================
+============================== 1 passed in 6.82s ===============================

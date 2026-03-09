@@ -26,4 +26,26 @@ git config core.hooksPath scripts/hooks
 chmod +x scripts/hooks/pre-commit
 chmod +x scripts/increment_version.sh
 
+echo "Injecting git push interceptor into virtual environment..."
+cat << 'EOF' >> $VENV_DIR/bin/activate
+
+# Intercept git push to automatically wait for deployment receipt
+git() {
+    if [ "$1" = "push" ]; then
+        command git "$@"
+        local push_exit_code=$?
+        if [ $push_exit_code -eq 0 ]; then
+            if [ -x "./jenkins/wait-for-receipt.sh" ]; then
+                ./jenkins/wait-for-receipt.sh
+            else
+                echo "Warning: ./jenkins/wait-for-receipt.sh not found or not executable."
+            fi
+        fi
+        return $push_exit_code
+    else
+        command git "$@"
+    fi
+}
+EOF
+
 echo "Setup complete! To activate your environment, run: source $VENV_DIR/bin/activate"

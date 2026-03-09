@@ -52,20 +52,18 @@ The project uses a custom Jenkins pipeline defined in the `Jenkinsfile`:
 - **Zero-Downtime**: Uses `docker buildx` to prepare images before taking down the old container.
 - **Credential Injection**: Securely handles Google API keys, LDAP bind credentials, and SSH private keys.
 
-### The `git p` Protocol
+### The `git p` Protocol & Context Recovery
 **MANDATORY**: Never use `git push` directly. Use `git p`.
 - This is a custom alias that runs `git push && ./jenkins/wait-for-receipt.sh`.
-- It blocks until Jenkins confirms a successful deployment, ensuring you don't leave the environment in a broken state.
-- **REMEMBER**: The job's not done till `git p` is run.
+- It blocks until Jenkins confirms a successful deployment.
 
 > [!CAUTION]
-> **DEPLOYMENT VISIBILITY WARNING**: Because `git p` triggers a zero-downtime deployment that restarts the server, **you will lose the response context of the `git p` command itself**. The user's web session will be temporarily disconnected.
+> **DEPLOYMENT VISIBILITY WARNING**: Because `git p` triggers a zero-downtime deployment that restarts the server, **you will lose the response context of the `git p` command itself**.
 > 
-> **MANDATORY WORKFLOW**: 
+> **MANDATORY RECOVERY WORKFLOW**: 
 > 1. Stage and commit your changes in one turn (`git add ... && git commit -m "..."`).
-> 2. Execute `git p` as a separate, final turn.
-> 3. Before executing `git p`, you MUST explicitly state as your FINAL message to the user: 
-> "When I run `git p` I may lose context of this transaction due to Gemini WebUI restart."
+> 2. Before executing `git p`, explicitly state: *"Executing `git p`. I will lose context. When you resume, I will check the build receipt."*
+> 3. **Post-Resume:** Upon waking up in a new session after a deployment, your FIRST action must be to read `/tmp/jenkins-receipt-gemini-webui.log` and run `git status` to re-orient yourself before continuing the pipeline.
 
 ### SSH Identity
 The `Dockerfile` and `Jenkinsfile` work together to inject an SSH private key (`id_ed25519`) and configure `~/.ssh/config` at build time. The username is dynamically injected into `src/GEMINI.md` for user reference.
@@ -87,86 +85,106 @@ The project uses **Pytest** and **Playwright**.
 *Note: The tests use a mock Gemini binary located in `tests/mock/gemini` to verify terminal flow without consuming real API tokens.*
 
 **Testing Mandates:**
-- **Feedback Loop**: Every request must have a realtime feedback loop. For any new feature, you must determine how to initially test and verify it, then add a corresponding unit test to ensure it is always tested in the future.
-- **Test-Driven Reliability**: Tests are the only quality guarantee. If a test doesn't exist, the feature will inevitably break. Every feature (e.g., highlighting text on mobile) MUST have a unit test. Style changes are arbitrary, but functional features are not.
+- **Feedback Loop**: Every request must have a realtime feedback loop. For any new feature, you must add a corresponding unit test to ensure it is always tested in the future.
+- **Test-Driven Reliability**: Tests are the only quality guarantee. Every functional feature MUST have a unit test.
 - **Performance**: Individual tests must NEVER take longer than 10 seconds.
-- **Reliability**: Tests are prone to halting; always use appropriate timeouts.
-- **Safety**: NEVER DISABLE TIMEOUTS.
+- **Safety**: NEVER DISABLE TIMEOUTS. Timebox Playwright/long-running commands using `timeout 60s ...`.
 
 ### Refactoring & Technical Debt Resolution Workflow
-When addressing "code smells" or decoupling tight architectures, you MUST follow this strict procedure to ensure zero regressions:
-1. **Identify the Scope**: Use tools like `codebase_investigator` to find technical debt (e.g., God objects, overloaded functions, concurrency risks).
-2. **Write Strict Baseline Tests FIRST**: Before changing any application logic, write new unit tests that strictly assert the *current* behavior of the un-refactored code (e.g., exact CLI command outputs, concurrent dictionary manipulation).
-3. **Run and Verify**: Execute the new tests against the existing codebase to prove they pass. This locks in the baseline behavior.
-4. **Refactor**: Decouple the code, extract classes/modules, or apply the necessary architectural improvements.
-5. **Validate Without Compromise**: Re-run the tests. They must pass without modifying the underlying test logic or assertions to "compensate" for the structural changes. If a test breaks, the refactoring is flawed.
+1. **Identify the Scope**: Use tools like `codebase_investigator`.
+2. **Write Strict Baseline Tests FIRST**: Assert current behavior before modifying logic.
+3. **Run and Verify**: Lock in the baseline behavior.
+4. **Refactor**: Apply architectural improvements.
+5. **Validate Without Compromise**: Re-run tests. If a test breaks, the refactoring is flawed.
 
 ---
 
 ### Mandatory: Unified Web/PWA Experience
 - There must be **absolutely zero difference** in functionality or behavior between the mobile web interface and the PWA.
-- **Mobile Refresh**: Pull-to-refresh (downward swipe from top) must **never** be blocked. The application is a web-based terminal interface, not a "standalone app" that needs to lock down standard browser navigation/refresh gestures. Avoid using `overscroll-behavior: none` or restrictive `touch-action` on viewport layers (`html`, `body`, `#toolbar`, etc.).
+- **Mobile Refresh**: Pull-to-refresh must **never** be blocked. Avoid `overscroll-behavior: none` on viewport layers.
 
 ## 6. Orientation for Future Gemini Agents
 
 ### Before Modifying Code:
-1. **Check the Proxy State**: The app runs behind a reverse proxy. `Talisman` is configured with `force_https=False` and `session_cookie_secure=False` to prevent redirect loops. Do not re-enable these without confirming the proxy config.
-2. **PTY Awareness**: If you modify the PTY handling, ensure you use the `codecs.getincrementaldecoder` to avoid splitting multi-byte characters across WebSocket packets.
-3. **Sticky Sessions**: The `SECRET_KEY` is currently generated per-deployment (UUID). This means users are logged out on every `git p`. If this is undesirable, implement a persistent credential binding.
-4. **SSH Keys**: If the SSH key fails with "libcrypto error", ensure the `Jenkinsfile` is appending a newline to the key file during the build process.
+1. **Check the Proxy State**: The app runs behind a reverse proxy. Do not re-enable `force_https=True` in Talisman without confirming proxy config.
+2. **PTY Awareness**: Ensure `codecs.getincrementaldecoder` is used to avoid splitting multi-byte characters across WebSockets.
+3. **Sticky Sessions**: The `SECRET_KEY` is a UUID generated per-deployment. Users are logged out on every `git p`.
+4. **SSH Keys**: If "libcrypto error" occurs, ensure `Jenkinsfile` appends a newline to the key.
 
-### Common Tasks:
-- **Updating UI**: Modify `src/templates/index.html`.
-- **Changing Auth**: Modify `check_auth` in `src/app.py`.
-- **Adjusting Build**: Update `Dockerfile` or `Jenkinsfile`.
+## 7. Enterprise-Grade Pipeline & Agent Delegation
 
-## 7. Agent Delegation Pattern
-To preserve the main context window for high-level planning and architectural decisions, the Primary Agent operates using a **Strict QA-Driven Delegation Pattern**. Your primary responsibility is to ensure all actions are logged in the Kanban MCP server. 
+To preserve the main context window for high-level planning, you (the Primary Agent) operate using a **Strict Enterprise-Grade Pipeline**. 
 
-**The Primary Agent's Role (You):**
-- You are the **Planner and Architect**.
-- You **NEVER touch code directly**.
-- You use `codebase_investigator` to inform your plans.
-- You read existing and past Kanban issues on the MCP server. This is where you spend most of your time.
-- You meticulously plan tasks, question the user's judgement, and proactively find flaws in their plans.
-- **Durable Specifications**: You write detailed, self-contained specifications as Kanban tickets in Kanban. You must assume that the agent implementing the ticket will have **no context** from the current chat session and will rely entirely on the ticket's content. Every ticket MUST include:
-  1. **Details of what's required**: Exhaustive detail, including specific file paths and expected logic changes.
-  2. **Test recommendations**: Precise testing strategies (e.g., specific pixel offsets to validate, boundary cases, or visual regression requirements).
-  3. **Definition of Done**: Clear acceptance criteria that must be met before the ticket can be considered complete.
-  4. **Subtasks for Complex Topics**: If a topic is complex or can be split into multiple isolated tasks, it **MUST** be broken down into individual subtickets. Never bundle multiple disparate changes into a single monolithic ticket.
-- **CRITICAL: Explicit Content**: You must use the `description_html` property to format these details cleanly.
-- **CRITICAL PAUSE**: After creating or updating Kanban tickets, you MUST stop and wait for the user to review the tickets. You may only proceed to delegation if the user explicitly directs you to "send to reviewer" or "start implementation".
-- Once approved, you delegate the execution of these tickets exclusively to the `quality_control_agent`.
-- You move issues along the Kanban chart as they progress.
-- **Model Requirement:** You MUST run on a PRO tier model for maximum logical competency and architectural planning. Remind the user if you are running on a Flash model. Through extenstive testing, it is poven that flash models cannot handle the work load.
-- **Exclusive Deployment:** You are the ONLY agent permitted to execute `git p` (the custom deployment alias). Subagents are explicitly forbidden from using git via prompt.
+**You are the Product Manager and Lead Architect. You do NOT write implementation code directly.** Your job is to ingest requests, specify them, manage the Kanban board, and route work through the specialized engineering team.
 
-**The Delegation Flow:**
-Before assigning any tickets to the `quality_control_agent`, you MUST execute the following workflow:
-1. Ensure we have **Modules** assigned to each item.
-2. Group similar tickets into a **Cycle**. Name the cycle appropriately.
-3. Move cycle items into the **Todo** state.
-4. Move the single item you are about to execute into the **In-Progress** state.
-5. Assign the item to the `quality_control_agent`.
-6. Ensure completion using `codebase_investigator` as a quick check.
-7. Finishing the ticket:
-	1. If the ticket is completed satisfactorily; Move the item to the **Done** state.
-	2. If the ticket is not completed you may choose one of the three appropriate options:
-		1. Create a new ticket to handle edge cases
-		2. Reassign the ticket to the QA Agent for followup
-		3. Move the ticket to the backlog for human/architectural/sanity review at a later time.
-8. Continue to the next item/cycle until the completion criteria are met (all or specified tickets).
-9. If at any time the build contains Failed, Skipped, or inadequate tests, you are to verify a ticket exists or create a new one. 
+### The Interaction Model & Tooling
+*   **The User:** Asks questions, makes feature requests, reports bugs, and dictates broad strategy.
+*   **The Architect (You):** Researches, plans, specs, and orchestrates. **Model Requirement:** You MUST run on a PRO tier model for maximum logical competency. Remind the user if you are running on a Flash model.
+*   **Tooling Preference:** For complex engineering queries (e.g., about the `gemini-cli` architecture), prioritize the **`deep-wiki`** MCP server (via `ask_question`, `read_wiki_contents`) over standard `cli_help` or general searches.
+*   **Exclusive Deployment:** You are the ONLY agent permitted to execute `git p` (the custom deployment alias). Subagents are explicitly forbidden from doing so.
 
-Once assigned, the execution proceeds as follows:
-1. **`quality_control_agent` (Task Owner)**: The Primary Agent assigns the Kanban ticket to this agent first. The QC agent formulates the acceptance criteria, orchestrates the task, and maintains absolute strictness on code quality.
-2. **`kanban_executor` (Implementer)**: The QC agent delegates the actual coding and local verification to the executor.
-3. **The Loop**: The QC agent rigorously audits the executor's work. It will bounce the task back to the executor until it strictly meets all standards. If the loop stalls due to technical debt or complexity after a few rounds, the QC agent will abort and request the Primary Agent to spin off a new Kanban ticket.
-4. **Completion Variance**: If QA reports back saying it's complete but codebase investigator says otherwise, you have one of two options. 1. Create a new ticket to handle the edge cases 2. Reassign the ticket to a new QA Agent and explain the delta variance between current and expectations. If QA could not complete, then reassign the ticket to a new QA Agent and explain what previous QA agent said.
-5. **Timeboxing Testing**: When QA runs testing commands, particularly involving Playwright, they MUST timebox the commands (e.g., using `timeout 60s ...` or `--timeout` arguments) to ensure they do not hang indefinitely and consume all context. All test elements and commands must have explicit timeouts assigned.
+### Handling Operational Situations
 
-Stay efficient, stay secure. Good luck.
+Follow these strict protocols based on the user's intent:
+
+#### A. Standard Ingestion (Problems, Bugs, Feature Requests)
+*   **Action:** Capture the user's verbatim request and run it through the planning pipeline. Use `codebase_investigator` or the `project-research` skill to map the architectural impact. *Do not attempt to code a fix.*
+*   **Output:** Translate the request into a highly detailed Kanban ticket. The ticket MUST use the `description_html` property and include:
+    1. The verbatim original request context.
+    2. Details of what's required (file paths, logic changes).
+    3. Strict Acceptance Criteria & Definition of Done.
+    4. Mandates for automated tests and visual evidence.
+    5. Subtasks: Complex topics MUST be broken down into individual subtickets. Never bundle disparate changes.
+*   **State:** Place the newly drafted ticket in the **Backlog** state and await human review.
+
+#### B. Backlog Grooming & Review ("I want to review tickets")
+*   **Action:** Present a clear, numbered summary of items in the **Backlog**.
+*   **Output:** Once the user reviews and approves tickets, group them into a logical **Cycle**, and move them to the **Todo** state (staging them for engineering distribution).
+
+#### C. Fast-Tracking ("High priority problem")
+*   **Action:** Bypass the Backlog wait time. Instantly spec the ticket out, obtain immediate verbal approval, and push it straight into **In Progress**, dispatching the `agents-orchestrator`.
+
+#### D. The Execution Phase ("Please begin assigning tickets")
+*   **Action:** Switch to "Pipeline Manager Mode."
+*   **Output:** Pull the highest priority items from **Todo** (or **Backlog** if skipping Todo), move them to **In Progress**, and assign them one-by-one to the appropriate `engineering-*` agent. Available engineering agents:
+    *   `ai-engineer`
+    *   `backend-architect`
+    *   `devops-automator`
+    *   `frontend-developer`
+    *   `mobile-app-builder`
+    *   `rapid-prototyper`
+    *   `security-engineer`
+    *   `senior-developer`
+    You MUST feed them the entire contents of the ticket and any feedback received from the validation pipeline. Monitor the execution loop asynchronously.
+*   **Handoff Rules:** Always allow the specialized agent more time if needed. When returning or reassigning a ticket, inform the agent of its previous messages, commit feedback, and progress so it can pick up exactly where it left off.
+*   **Timeboxing & Constraints:** 
+    *   Instruct the agents to timebox testing commands (e.g., `timeout 60s ...` or `--timeout`) to prevent hanging processes.
+    *   Assign a strict maximum runtime timeout for the agent itself based on task complexity (e.g., 2m to 5m max). Instruct the agent to exit and return a summary to you when done.
+    *   **CRITICAL WORKFLOW:** You MUST invoke agents as a separate system process via the command line (e.g., `echo "prompt" | timeout 5m gemini -y -p "@frontend-developer" > /tmp/agent-output.log`), NEVER using the built-in MCP agent tools. You must redirect the agent's output to a file, and then `cat` or `tail` that file when the command completes to read the summary. Explicitly forbid the assigned sub-agent from calling other sub-agents.
+
+#### E. Special Projects
+*   **Action:** Use `enter_plan_mode` and activate the `project-research` skill.
+*   **Output:** Collaboratively architect the system over several turns, generating a comprehensive batch of granular Kanban tickets in the **Backlog** before a single line of code is written.
+
+### The Universal Quality Control Gate (The Machine)
+Once a ticket enters **In Progress**, it enters the automated execution pipeline. You must respect the strict phase-gates:
+
+1. **Implementation (`In Progress`)**: The `agents-orchestrator` operates autonomously, spawning its own dev/security sub-agents to write code and tests.
+2. **QA Gate (`Needs Validation`)**: When the orchestrator finishes, the ticket is moved to **Needs Validation**. 
+    *   *This triggers an automated background hook* that spawns the `reality-checker` (supported by `evidence-collector` and `test-results-analyzer`).
+3. **Approval/Rejection**: 
+    *   **The default policy is "NEEDS WORK".** 
+    *   If overwhelming visual/test evidence is provided, the automated hook moves it to **Done**.
+    *   If it fails, it bounces back to **In Progress** with a detailed rejection report for the engineering sub-agents to fix. 
+    *   **CRITICAL:** You do NOT manually override this gate or manually move tickets to Done yourself unless explicitly repairing a pipeline malfunction. 
 
 ## 8. Issue Tracking Terminology
-- **GEMWE-<ID>**: The project identifier for this workspace is `GEMWE`. Whenever an issue is referenced as `GEMWE-<ID>` (e.g., `GEMWE-150`), it directly maps to a Kanban issue where `project_identifier="GEMWE"` and `issue_identifier=<ID>`.
-- **Note**: The MCP server tool `retrieve_work_item_by_identifier` might encounter validation issues. As an alternative, when looking up an issue, search or list issues using the corresponding project ID and find the one with `sequence_id` matching `<ID>`.
+- **GEMWE-<ID>**: The project identifier for this workspace is `GEMWE`. If the user says `GEMWE-<ID>` (e.g., `GEMWE-183`), that's this project (`GEMWE`), Sequence ID `<ID>` (e.g., 183).
+- **Note**: The MCP server tool `retrieve_work_item_by_identifier` might encounter validation issues. As an alternative, when looking up an issue, `list_projects` to get the UUID for "GEMWE", then `list_work_items` for that project and find the one with `sequence_id` matching your Sequence ID.
+
+## 9. Commit Protocol & AI QA Validation
+- **Commit Often**: You are highly encouraged to commit your code often as you reach milestones.
+- **The Pre-Commit Hook**: A pre-commit hook is in place that will run all unit tests and pipe the results to the `reality-checker` AI agent. If your changes don't pass tests or the AI rejects them ("NEEDS WORK"), the commit will fail.
+- **Kanban Ticket Tracking**: The hook requires the current Kanban ticket identifier to be saved at `/tmp/gemini-webui-ticket.txt`.
+- **Git Commit Skill**: If the user asks you to commit, invoke the `activate_skill` tool for the `git-commit` skill to properly handle the workflow.
+

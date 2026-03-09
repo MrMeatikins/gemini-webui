@@ -6,12 +6,6 @@
         "Authorization": "Bearer ${KANBAN_API_KEY}",
         "X-Workspace-slug": "gemwebui"
       }
-    },
-    "joplin_memory": {
-      "url": "http://192.168.1.133:3000/http-api/mcp",
-      "headers": {
-        "Authorization": "Bearer 74eac216-5757-413a-ba6c-4599efd591b1"
-      }
     }
   },
   "general": {
@@ -21,5 +15,30 @@
   },
   "ui": {
     "inlineThinkingMode": "full"
+  },
+  "agents": {
+    "overrides": {
+      "quality_control_agent": {
+        "enabled": false
+      },
+      "kanban_executor": {
+        "enabled": false
+      }
+    }
+  },
+  "hooks": {
+    "AfterTool": [
+      {
+        "matcher": "update_work_item",
+        "hooks": [
+          {
+            "name": "validate-ticket",
+            "type": "command",
+            "command": "./.gemini/hooks/validate-ticket.sh",
+            "description": "Trigger validation pipeline when ticket moves to Needs Validation"
+          }
+        ]
+      }
+    ]
   }
 }
