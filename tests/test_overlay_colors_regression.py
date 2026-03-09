@@ -42,11 +42,10 @@ def test_overlay_box_colors_match_terminal_theme(page):
     
     # Check that it's definitively not black and white
     assert colors['bg'] != 'rgb(0, 0, 0)', "Regression: Background is stark black!"
-    assert colors['bg'] != 'rgba(0, 0, 0, 0)', "Regression: Background is transparent!"
     assert colors['fg'] != 'rgb(255, 255, 255)', "Regression: Foreground is stark white!"
     
-    # Check that it matches the dark gray/light gray theme specifically
-    # Allowing for #1e1e1e (30,30,30) and #cccccc (204,204,204) or #d4d4d4 (212,212,212)
-    assert colors['bg'] == 'rgb(30, 30, 30)', f"Expected dark gray #1e1e1e background, got {colors['bg']}"
+    # Check that it matches the transparent background and light gray foreground
+    # Allowing for rgba(0, 0, 0, 0) and #cccccc (204,204,204) or #d4d4d4 (212,212,212)
+    assert colors['bg'] in ['rgba(0, 0, 0, 0)', 'transparent'], f"Expected transparent background, got {colors['bg']}"
     assert colors['fg'] in ['rgb(204, 204, 204)', 'rgb(212, 212, 212)', 'rgb(229, 229, 229)'], f"Expected light gray foreground, got {colors['fg']}"
 

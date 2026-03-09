@@ -32,5 +32,5 @@ def test_overlay_color(page):
     }''')
     print("Computed Styles of terminal:", term_style)
     
-    assert style['bg'] == 'rgb(30, 30, 30)', f"Expected 'rgb(30, 30, 30)', got {style['bg']}"
+    assert style['bg'] in ['rgba(0, 0, 0, 0)', 'transparent'], f"Expected transparent background, got {style['bg']}"
     assert style['fg'] == 'rgb(212, 212, 212)', f"Expected 'rgb(212, 212, 212)', got {style['fg']}"

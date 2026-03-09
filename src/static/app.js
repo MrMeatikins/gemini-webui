@@ -339,7 +339,7 @@
                     tab.term.options.theme = terminalTheme;
                     tab.term.options.fontSize = currentFontSize;
                     if (tab.term.textarea) {
-                        tab.term.textarea.style.backgroundColor = terminalTheme.background;
+                        tab.term.textarea.style.backgroundColor = 'transparent';
                         tab.term.textarea.style.color = terminalTheme.foreground;
                     }
                     fitTerminal(tab);
@@ -1158,7 +1158,7 @@
                 textarea.setAttribute('autocorrect', 'on');
                 textarea.setAttribute('autocapitalize', 'sentences');
                 textarea.setAttribute('spellcheck', 'true');
-                textarea.style.backgroundColor = terminalTheme.background;
+                textarea.style.backgroundColor = 'transparent';
                 textarea.style.color = terminalTheme.foreground;
 
                 // TRACK COMPOSITION STATE (Speech-to-Text, swipe typing, etc.)
